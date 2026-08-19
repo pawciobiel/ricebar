@@ -1,0 +1,13 @@
+[package]
+name = "ricebar"
+version = "0.1.0"
+edition = "2024"
+description = "A configurable Wayland status bar built with iced"
+license = "MIT"
+repository = "https://github.com/pawciobiel/ricebar"
+keywords = ["wayland", "statusbar", "layer-shell", "iced", "hyprland"]
+categories = ["gui"]
+
+[dependencies]
+iced = { version = "0.14", features = ["tokio"] }
+iced_layershell = "0.19.1"
