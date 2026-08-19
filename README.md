@@ -56,7 +56,7 @@ software renderer via `tiny-skia` if wgpu is unavailable).
 - [x] **M0** Layer-shell surface, multi-monitor, exclusive zone
 - [x] **M1** Elm loop + clock
 - [ ] **M2** TOML config + styling
-- [ ] **M3** Hyprland workspaces
+- [x] **M3** Hyprland workspaces
 - [ ] **M4** `Module` trait + registry
 - [ ] **M5** `[[module.custom]]` script modules
 

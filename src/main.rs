@@ -1,5 +1,6 @@
 mod app;
 mod clock;
+mod compositor;
 
 use iced_layershell::build_pattern::daemon;
 use iced_layershell::reexport::{Anchor, KeyboardInteractivity, Layer};
