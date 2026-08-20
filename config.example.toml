@@ -1,0 +1,34 @@
+# ricebar — copy to ~/.config/ricebar/config.toml
+#
+# A module runs only if it is named in one of the modules-* lists below.
+# Remove "clock" from modules-center and the clock is gone.
+
+[bar]
+position = "top"          # top | bottom
+height = 32
+margin = [0, 0, 0, 0]     # top, right, bottom, left
+exclusive = true          # reserve the space so windows cannot cover the bar
+spacing = 8               # gap between modules
+padding = 8               # gap between modules and the bar's edge
+
+modules-left = ["workspaces"]
+modules-center = ["clock"]
+modules-right = []
+
+[bar.style]
+# #rgb, #rgba, #rrggbb and #rrggbbaa all work.
+background = "#1e1e2e"
+foreground = "#cdd6f4"
+accent = "#89b4fa"        # fill behind the focused item
+muted = "#45475a"         # fill behind an active but unfocused item
+dim = "#6c7086"           # text of an empty item
+border-color = "#89b4fa"
+border-width = 0
+border-radius = 0
+
+[module.clock]
+format = "%Y-%m-%d %H:%M:%S"
+interval = 1              # seconds
+
+[module.workspaces]
+show-empty = true

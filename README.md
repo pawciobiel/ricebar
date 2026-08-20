@@ -22,24 +22,40 @@ config, a Rust module API, and a script escape hatch for everything else.
 
 ## Configuration
 
-`$XDG_CONFIG_HOME/ricebar/config.toml`:
+`$XDG_CONFIG_HOME/ricebar/config.toml`, or `~/.config/ricebar/config.toml`.
+See [`config.example.toml`](config.example.toml) for every option.
+
+A module runs only if it is named in one of the `modules-*` lists, so removing
+`"clock"` from `modules-center` removes the clock.
 
 ```toml
 [bar]
-position = "top"
+position = "top"          # top | bottom
 height = 32
+margin = [0, 0, 0, 0]     # top, right, bottom, left
 modules-left = ["workspaces"]
 modules-center = ["clock"]
+modules-right = []
 
 [bar.style]
-background = "#1e1e2ecc"
+background = "#1e1e2e"    # #rgb, #rgba, #rrggbb and #rrggbbaa all work
+foreground = "#cdd6f4"
+accent = "#89b4fa"        # fill behind the focused item
 border-color = "#89b4fa"
-border-width = 2
-border-radius = 8
+border-width = 0
+border-radius = 0
 
 [module.clock]
-format = "%Y-%m-%d %H:%M"
+format = "%Y-%m-%d %H:%M:%S"
+interval = 1
+
+[module.workspaces]
+show-empty = true
 ```
+
+Missing config is normal and uses defaults. A *broken* config is reported on
+stderr, naming the line and the valid field names, and then falls back to
+defaults — a bar that refuses to start would leave you no way to fix it.
 
 ## Build
 
@@ -55,9 +71,9 @@ software renderer via `tiny-skia` if wgpu is unavailable).
 
 - [x] **M0** Layer-shell surface, multi-monitor, exclusive zone
 - [x] **M1** Elm loop + clock
-- [ ] **M2** TOML config + styling
+- [x] **M2** TOML config + styling
 - [x] **M3** Hyprland workspaces
-- [ ] **M4** `Module` trait + registry
+- [x] **M4** `Module` trait + registry
 - [ ] **M5** `[[module.custom]]` script modules
 
 ## License

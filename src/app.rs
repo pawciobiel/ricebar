@@ -1,42 +1,71 @@
-use std::time::Duration;
-
-use iced::widget::{button, container, row, space, text};
-use iced::{Alignment, Color, Element, Length, Subscription, Task, window};
+use iced::widget::{container, row};
+use iced::{Alignment, Border, Color, Element, Length, Subscription, Task, window};
 use iced_layershell::to_layer_message;
 
-use crate::clock::Clock;
-use crate::compositor::{self, Compositor, Workspace, Workspaces};
+use crate::config;
+use crate::modules::{self, Event, Module};
 
 /// Everything the bar knows. `update` is the only thing allowed to change it.
 pub struct Bar {
-    clock: Clock,
-    compositor: Option<Box<dyn Compositor>>,
-    workspaces: Workspaces,
+    config: config::Config,
+    /// Every enabled module, in one flat list so a single index identifies one.
+    modules: Vec<Box<dyn Module>>,
+    left: Vec<usize>,
+    center: Vec<usize>,
+    right: Vec<usize>,
 }
 
-impl Default for Bar {
-    fn default() -> Self {
-        let compositor = compositor::detect();
+impl Bar {
+    pub fn new(config: config::Config) -> Self {
+        let mut modules = Vec::new();
 
-        match &compositor {
-            Some(compositor) => eprintln!("ricebar: compositor: {}", compositor.name()),
-            None => eprintln!("ricebar: no supported compositor detected"),
+        let left = region(&mut modules, &config.bar.modules_left, &config.module);
+        let center = region(&mut modules, &config.bar.modules_center, &config.module);
+        let right = region(&mut modules, &config.bar.modules_right, &config.module);
+
+        if modules.is_empty() {
+            eprintln!("ricebar: no modules enabled; check the modules-* lists in config");
+        } else {
+            let names: Vec<&str> = modules.iter().map(|module| module.name()).collect();
+            eprintln!("ricebar: {} module(s): {}", names.len(), names.join(", "));
         }
 
         Self {
-            clock: Clock::new("%Y-%m-%d %H:%M:%S"),
-            compositor,
-            workspaces: Workspaces::new(),
+            config,
+            modules,
+            left,
+            center,
+            right,
         }
     }
+}
+
+/// Build one region's modules, returning their indices into the flat list.
+fn region(
+    modules: &mut Vec<Box<dyn Module>>,
+    names: &[String],
+    config: &config::Modules,
+) -> Vec<usize> {
+    let mut indices = Vec::new();
+
+    for name in names {
+        match modules::build(name, config) {
+            Some(module) => {
+                indices.push(modules.len());
+                modules.push(module);
+            }
+            None => eprintln!("ricebar: unknown module `{name}`, ignoring"),
+        }
+    }
+
+    indices
 }
 
 #[to_layer_message(multi)]
 #[derive(Debug, Clone)]
 pub enum Message {
-    Tick,
-    Workspaces(Workspaces),
-    FocusWorkspace(i32),
+    /// An event for the module at this index.
+    Module(usize, Event),
 }
 
 pub fn namespace() -> String {
@@ -44,28 +73,24 @@ pub fn namespace() -> String {
 }
 
 pub fn subscription(bar: &Bar) -> Subscription<Message> {
-    let clock = iced::time::every(Duration::from_secs(1)).map(|_| Message::Tick);
-
-    match &bar.compositor {
-        Some(compositor) => {
-            Subscription::batch([clock, compositor.workspaces().map(Message::Workspaces)])
-        }
-        None => clock,
-    }
+    Subscription::batch(bar.modules.iter().enumerate().map(|(index, module)| {
+        // `with` folds the index into the subscription's identity. Without it
+        // iced would hash only the *type* of the closure below, so two modules
+        // sharing an inner recipe would collapse into a single stream and one
+        // of them would never receive an event.
+        module
+            .subscription()
+            .with(index)
+            .map(|(index, event)| Message::Module(index, event))
+    }))
 }
 
 pub fn update(bar: &mut Bar, message: Message) -> Task<Message> {
     match message {
-        Message::Tick => {
-            bar.clock.tick();
-            Task::none()
-        }
-        Message::Workspaces(workspaces) => {
-            bar.workspaces = workspaces;
-            Task::none()
-        }
-        Message::FocusWorkspace(id) => match &bar.compositor {
-            Some(compositor) => compositor.focus(id).discard(),
+        Message::Module(index, event) => match bar.modules.get_mut(index) {
+            Some(module) => module
+                .update(event)
+                .map(move |event| Message::Module(index, event)),
             None => Task::none(),
         },
         // `to_layer_message` appends its own variants to this enum. Upstream's
@@ -75,61 +100,52 @@ pub fn update(bar: &mut Bar, message: Message) -> Task<Message> {
 }
 
 pub fn view(bar: &Bar, _id: window::Id) -> Element<'_, Message> {
-    let workspaces = row(bar.workspaces.iter().map(workspace)).spacing(4);
+    let style = bar.config.bar.style;
+    let spacing = bar.config.bar.spacing;
 
-    let bar = row![
-        container(workspaces).width(Length::FillPortion(1)),
-        container(text(bar.clock.label())).center_x(Length::FillPortion(1)),
-        container(space::horizontal()).width(Length::FillPortion(1)),
+    let region = |indices: &[usize]| {
+        row(indices.iter().filter_map(|&index| {
+            let module = bar.modules.get(index)?;
+
+            Some(
+                module
+                    .view(style)
+                    .map(move |event| Message::Module(index, event)),
+            )
+        }))
+        .spacing(spacing)
+        .align_y(Alignment::Center)
+    };
+
+    let content = row![
+        container(region(&bar.left)).width(Length::FillPortion(1)),
+        container(region(&bar.center)).center_x(Length::FillPortion(1)),
+        container(region(&bar.right)).align_right(Length::FillPortion(1)),
     ]
     .align_y(Alignment::Center);
 
-    container(bar)
+    container(content)
         .width(Length::Fill)
         .height(Length::Fill)
-        .padding([0, 8])
-        .into()
-}
-
-fn workspace(workspace: &Workspace) -> Element<'_, Message> {
-    let occupied = workspace.windows > 0;
-    let focused = workspace.focused;
-    let visible = workspace.visible;
-
-    button(text(workspace.name.as_str()))
-        .padding([2, 8])
-        .on_press(Message::FocusWorkspace(workspace.id))
-        .style(move |_theme, _status| {
-            let background = if focused {
-                Some(Color::from_rgb8(0x89, 0xb4, 0xfa).into())
-            } else if visible {
-                Some(Color::from_rgb8(0x45, 0x47, 0x5a).into())
-            } else {
-                None
-            };
-
-            button::Style {
-                background,
-                text_color: if focused {
-                    Color::from_rgb8(0x1e, 0x1e, 0x2e)
-                } else if occupied {
-                    Color::from_rgb8(0xcd, 0xd6, 0xf4)
-                } else {
-                    Color::from_rgb8(0x6c, 0x70, 0x86)
-                },
-                border: iced::Border {
-                    radius: 4.into(),
-                    ..Default::default()
-                },
-                ..Default::default()
-            }
+        .padding([0.0, bar.config.bar.padding])
+        .style(move |_theme| container::Style {
+            background: Some(style.background.color().into()),
+            border: Border {
+                color: style.border_color.color(),
+                width: style.border_width,
+                radius: style.border_radius.into(),
+            },
+            ..Default::default()
         })
         .into()
 }
 
-pub fn style(_bar: &Bar, _theme: &iced::Theme) -> iced::theme::Style {
+pub fn style(bar: &Bar, _theme: &iced::Theme) -> iced::theme::Style {
     iced::theme::Style {
-        background_color: Color::from_rgb8(0x1e, 0x1e, 0x2e),
-        text_color: Color::from_rgb8(0xcd, 0xd6, 0xf4),
+        // The container in `view` paints the fill, so the surface itself stays
+        // transparent. That is what lets border-radius round real corners
+        // instead of cutting into an opaque rectangle.
+        background_color: Color::TRANSPARENT,
+        text_color: bar.config.bar.style.foreground.color(),
     }
 }
