@@ -99,6 +99,28 @@ impl Default for Style {
 pub struct Modules {
     pub clock: Clock,
     pub workspaces: Workspaces,
+    /// User-defined command modules, each enabled by its own `name`.
+    pub custom: Vec<Custom>,
+}
+
+/// A module that runs a shell command and shows its output.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct Custom {
+    /// The name used in the `modules-*` lists.
+    pub name: String,
+    /// Passed to `sh -c`.
+    pub exec: String,
+    /// Seconds between runs.
+    #[serde(default = "one")]
+    pub interval: u64,
+    /// Shown on hover, unless the command prints its own.
+    #[serde(default)]
+    pub tooltip: Option<String>,
+}
+
+fn one() -> u64 {
+    1
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -106,6 +128,8 @@ pub struct Modules {
 pub struct Clock {
     /// strftime format.
     pub format: String,
+    /// strftime format shown in the hover popup.
+    pub tooltip_format: String,
     /// Seconds between redraws.
     pub interval: u64,
 }
@@ -114,6 +138,7 @@ impl Default for Clock {
     fn default() -> Self {
         Self {
             format: String::from("%Y-%m-%d %H:%M:%S"),
+            tooltip_format: String::from("%A, %-d %B %Y"),
             interval: 1,
         }
     }

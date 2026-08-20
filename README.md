@@ -51,7 +51,18 @@ interval = 1
 
 [module.workspaces]
 show-empty = true
+
+# Any shell command becomes a module. No Rust required.
+[[module.custom]]
+name = "memory"
+exec = "free -m | awk '/^Mem:/ {printf \"%.0f%%\", $3/$2*100}'"
+interval = 5
 ```
+
+Hovering a module opens a tooltip on its own layer-shell surface, so it is not
+clipped by the bar's height. It is anchored under the module's region, which
+keeps it on screen. The clock shows a full date; a custom module can print a
+JSON object with `text` and `tooltip` to supply its own.
 
 Missing config is normal and uses defaults. A *broken* config is reported on
 stderr, naming the line and the valid field names, and then falls back to
@@ -74,7 +85,8 @@ software renderer via `tiny-skia` if wgpu is unavailable).
 - [x] **M2** TOML config + styling
 - [x] **M3** Hyprland workspaces
 - [x] **M4** `Module` trait + registry
-- [ ] **M5** `[[module.custom]]` script modules
+- [x] **M5** `[[module.custom]]` script modules
+- [ ] Per-monitor bars (currently every output shows the same content)
 
 ## License
 

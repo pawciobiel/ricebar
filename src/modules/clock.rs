@@ -11,6 +11,7 @@ use crate::config;
 
 pub struct Clock {
     format: String,
+    tooltip_format: String,
     interval: Duration,
     label: String,
 }
@@ -19,6 +20,7 @@ impl Clock {
     pub fn new(config: &config::Clock) -> Self {
         let mut clock = Self {
             format: config.format.clone(),
+            tooltip_format: config.tooltip_format.clone(),
             // A zero interval would spin the timer as fast as it can.
             interval: Duration::from_secs(config.interval.max(1)),
             label: String::new(),
@@ -28,15 +30,12 @@ impl Clock {
     }
 
     fn refresh(&mut self) {
-        // The format comes from user config, so a bad one must not bring the bar
-        // down. `Zoned::strftime` returns a Display that panics when stringified.
-        self.label = strtime::format(&self.format, &Zoned::now())
-            .unwrap_or_else(|_| String::from("bad format"));
+        self.label = render(&self.format);
     }
 }
 
 impl Module for Clock {
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         "clock"
     }
 
@@ -54,6 +53,16 @@ impl Module for Clock {
     fn view(&self, _style: config::Style) -> Element<'_, Event> {
         text(self.label.as_str()).into()
     }
+
+    fn tooltip(&self) -> Option<String> {
+        Some(render(&self.tooltip_format))
+    }
+}
+
+/// The format comes from user config, so a bad one must not bring the bar down.
+/// `Zoned::strftime` returns a Display that panics when stringified.
+fn render(format: &str) -> String {
+    strtime::format(format, &Zoned::now()).unwrap_or_else(|_| String::from("bad format"))
 }
 
 /// `Subscription::run_with` takes a plain fn pointer and hashes the data it is

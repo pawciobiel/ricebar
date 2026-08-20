@@ -29,7 +29,7 @@ impl Workspaces {
 }
 
 impl Module for Workspaces {
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         "workspaces"
     }
 
@@ -50,7 +50,7 @@ impl Module for Workspaces {
                 Some(compositor) => compositor.focus(id).discard(),
                 None => Task::none(),
             },
-            Event::Tick => Task::none(),
+            Event::Tick | Event::Content(_) => Task::none(),
         }
     }
 

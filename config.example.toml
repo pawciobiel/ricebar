@@ -13,7 +13,7 @@ padding = 8               # gap between modules and the bar's edge
 
 modules-left = ["workspaces"]
 modules-center = ["clock"]
-modules-right = []
+modules-right = ["memory"]
 
 [bar.style]
 # #rgb, #rgba, #rrggbb and #rrggbbaa all work.
@@ -28,7 +28,26 @@ border-radius = 0
 
 [module.clock]
 format = "%Y-%m-%d %H:%M:%S"
-interval = 1              # seconds
+tooltip-format = "%A, %-d %B %Y"   # shown on hover
+interval = 1                       # seconds
 
 [module.workspaces]
 show-empty = true
+
+# Custom modules run a shell command and show its output. This is how to add
+# a module without writing any Rust.
+#
+# A command may print plain text, or a JSON object with "text" and an optional
+# "tooltip". Anything that fails prints "!" with the reason in its tooltip.
+
+[[module.custom]]
+name = "memory"
+exec = '''free -m | awk '/^Mem:/ {printf "{\"text\":\"%.0f%%\",\"tooltip\":\"%d MiB of %d MiB used\"}", $3/$2*100, $3, $2}' '''
+interval = 5
+
+# The simplest possible form: plain text, with a fixed tooltip.
+# [[module.custom]]
+# name = "kernel"
+# exec = "uname -r"
+# interval = 3600
+# tooltip = "Running kernel"
