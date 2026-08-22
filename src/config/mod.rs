@@ -277,6 +277,11 @@ pub struct Custom {
     /// Passed to `sh -c` when the module is clicked. Setting it is what makes
     /// the module a button.
     pub on_click: Option<String>,
+    /// Show at most this many characters, scrolling the rest past like a
+    /// ticker. Zero shows everything and never scrolls.
+    pub scroll_width: usize,
+    /// Characters per second the ticker moves.
+    pub scroll_speed: f32,
     /// Fill behind this module. Unset draws on the bar's own background.
     pub background: Option<Rgba>,
     /// Text colour for this module, overriding the bar's.
@@ -295,6 +300,8 @@ impl Default for Custom {
             icons: Vec::new(),
             tooltip: None,
             on_click: None,
+            scroll_width: 0,
+            scroll_speed: 4.0,
             background: None,
             foreground: None,
         }

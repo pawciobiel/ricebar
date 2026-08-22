@@ -153,8 +153,14 @@ state a script cannot see.
 
 - [x] **More than one row.** `[[bar.row]]` stacks lines, each with its own
       regions and height; the reserved space grows with the total. A second row
-      is where anything too wide for a status bar goes — a stock ticker, now
+      is where anything too wide for a status bar goes — a ticker, now
       playing, a headline feed.
+- [x] **Ticker scrolling.** `scroll-width` shows a window that many characters
+      wide and moves the rest past it, wrapping through a separator. Stepped by
+      character rather than pixel: text cannot be measured outside a renderer,
+      and `iced_runtime`'s `scroll_to` is not re-exported through `iced`, so a
+      pixel-smooth version means either a new dependency or a custom widget.
+      Looks best in a monospace font.
 
 - [ ] **Measure tooltip text properly.** The surface is sized from a glyph-count
       estimate scaled by font size, because text cannot be measured outside a

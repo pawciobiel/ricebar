@@ -33,9 +33,20 @@ pub struct Custom {
     format: String,
     icons: Vec<String>,
     on_click: Option<String>,
+    ticker: Option<Ticker>,
     background: Option<config::Rgba>,
     foreground: Option<config::Rgba>,
     content: Content,
+}
+
+/// A window onto content too long to sit in the bar, moved along a step at a
+/// time. Character-stepped rather than pixel-smooth: text cannot be measured
+/// outside a renderer, and a monospace font makes the difference hard to see.
+struct Ticker {
+    width: usize,
+    step: Duration,
+    /// How far the window has travelled, in characters.
+    offset: usize,
 }
 
 /// What produces the module's content, and how it is run.
@@ -65,6 +76,11 @@ impl Custom {
             format: config.format.clone(),
             icons: config.icons.clone(),
             on_click: trusted.then(|| config.on_click.clone()).flatten(),
+            ticker: (config.scroll_width > 0).then(|| Ticker {
+                width: config.scroll_width,
+                step: Duration::from_secs_f32(1.0 / config.scroll_speed.max(0.1)),
+                offset: 0,
+            }),
             background: config.background,
             foreground: config.foreground,
             content: if trusted {
@@ -95,9 +111,15 @@ impl Custom {
             self.content.text.as_str()
         };
 
-        self.format
+        let label = self
+            .format
             .replace("{icon}", icon)
-            .replace("{value}", value)
+            .replace("{value}", value);
+
+        match &self.ticker {
+            Some(ticker) => ticker.window(&label),
+            None => label,
+        }
     }
 }
 
@@ -107,18 +129,30 @@ impl Module for Custom {
     }
 
     fn subscription(&self) -> Subscription<Event> {
-        let Some(source) = self.source.clone() else {
-            return Subscription::none();
+        let content = match self.source.clone() {
+            // Keyed on the command, so two custom modules never share a
+            // stream. See the note in app::subscription.
+            Some(source) => Subscription::run_with(source, run),
+            None => Subscription::none(),
         };
 
-        // Keyed on the command, so two custom modules never share a stream.
-        // See the note in app::subscription.
-        Subscription::run_with(source, run)
+        let Some(ticker) = &self.ticker else {
+            return content;
+        };
+
+        // A second, faster subscription: content arrives when it arrives, and
+        // the ticker moves on its own beat.
+        Subscription::batch([content, Subscription::run_with(ticker.step, steps)])
     }
 
     fn update(&mut self, event: Event) -> Task<Event> {
         match event {
             Event::Content(content) => self.content = content,
+            Event::Tick => {
+                if let Some(ticker) = &mut self.ticker {
+                    ticker.advance();
+                }
+            }
             Event::Activate(_) => {
                 let Some(command) = self.on_click.clone() else {
                     return Task::none();
@@ -193,6 +227,31 @@ impl Module for Custom {
     }
 }
 
+impl Ticker {
+    fn advance(&mut self) {
+        self.offset = self.offset.wrapping_add(1);
+    }
+
+    /// The slice of `text` currently in view, wrapping round through a gap so
+    /// the end runs into the beginning rather than snapping back.
+    fn window(&self, text: &str) -> String {
+        let characters: Vec<char> = text.chars().collect();
+
+        if characters.len() <= self.width {
+            return text.to_owned();
+        }
+
+        let loop_: Vec<char> = characters.into_iter().chain(GAP.chars()).collect();
+
+        (0..self.width)
+            .map(|column| loop_[(self.offset + column) % loop_.len()])
+            .collect()
+    }
+}
+
+/// Separates the end of the text from its beginning as it comes round again.
+const GAP: &str = "   \u{2022}   ";
+
 /// What a command may print instead of plain text.
 #[derive(Deserialize)]
 struct Output {
@@ -201,6 +260,22 @@ struct Output {
     tooltip: Option<String>,
     #[serde(default)]
     percentage: Option<f32>,
+}
+
+fn steps(step: &Duration) -> impl Stream<Item = Event> + use<> {
+    let step = *step;
+
+    iced::stream::channel(1, async move |mut output| {
+        let mut timer = tokio::time::interval(step);
+
+        loop {
+            timer.tick().await;
+
+            if output.send(Event::Tick).await.is_err() {
+                return;
+            }
+        }
+    })
 }
 
 fn run(source: &Source) -> impl Stream<Item = Event> + use<> {

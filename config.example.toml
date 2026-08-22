@@ -39,6 +39,7 @@ modules-right = ["volume", "cpu", "memory", "temperature", "backlight", "battery
 [[bar.row]]
 height = 24
 modules-left = ["weather"]
+modules-center = ["ticker"]
 modules-right = ["kernel"]
 
 [bar.style]
@@ -131,6 +132,17 @@ name = "weather"
 exec = "LOCATION=Warsaw ~/.config/ricebar/scripts/weather.sh"
 stream = true
 tooltip = "Fetching weather..."
+
+# A ticker. Content longer than `scroll-width` characters is scrolled past a
+# window of that width, wrapping through a separator -- the second row is where
+# something too wide for a status bar belongs. Character-stepped rather than
+# pixel-smooth, so a monospace font looks best.
+[[module.custom]]
+name = "ticker"
+exec = "~/.config/ricebar/scripts/ticker.sh"
+stream = true
+scroll-width = 46
+scroll-speed = 6
 
 # The simplest possible module: one command, plain text, a fixed tooltip.
 [[module.custom]]
