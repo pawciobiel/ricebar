@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use iced::widget::{column, container, mouse_area, row, space, text};
@@ -21,6 +22,10 @@ pub struct Bar {
     popup: Option<Popup>,
     /// The module the pointer is currently inside.
     hovered: Option<usize>,
+    /// Scroll accumulated per module. A wheel reports whole notches, but a
+    /// touchpad reports a stream of small ones, and acting on each would run
+    /// the command dozens of times for a single flick.
+    scrolled: HashMap<usize, f32>,
     /// A popup we have asked to remove. Its surface may still ask to be drawn
     /// once more, and it must not fall through to rendering the whole bar.
     retiring: Option<window::Id>,
@@ -44,8 +49,10 @@ struct Popup {
 }
 
 enum PopupKind {
-    /// Hover text. Takes no pointer input, so the bar keeps receiving it.
-    Tooltip(String),
+    /// Hover text. Takes no pointer input, so the bar keeps receiving it. The
+    /// text is not kept here: it is read from the module as it is drawn, so a
+    /// tooltip showing a value follows that value while it is open.
+    Tooltip,
     /// Whatever the module draws for itself: a menu, a calendar. Takes pointer
     /// input, since it exists to be clicked.
     Module,
@@ -87,6 +94,7 @@ impl Bar {
             rows,
             popup: None,
             hovered: None,
+            scrolled: HashMap::new(),
             retiring: None,
         }
     }
@@ -123,20 +131,22 @@ pub enum Message {
     Enter(usize),
     /// The pointer left the module at this index.
     Leave(usize),
-    /// The wheel turned over the module at this index.
-    Scroll(usize, Direction),
+    /// The pointer scrolled over the module at this index, by however much it
+    /// reports at a time.
+    Scroll(usize, iced::mouse::ScrollDelta),
 }
 
-/// Which way a wheel turn went, whichever units the pointer reports in.
-fn direction_of(delta: iced::mouse::ScrollDelta) -> Direction {
-    let vertical = match delta {
-        iced::mouse::ScrollDelta::Lines { y, .. } | iced::mouse::ScrollDelta::Pixels { y, .. } => y,
-    };
+/// How far a touchpad must travel to count as one notch of a wheel.
+const PIXELS_PER_NOTCH: f32 = 40.0;
+/// The most notches a flick may bank, so letting go of a fast scroll does not
+/// keep firing the command afterwards.
+const NOTCH_LIMIT: f32 = 2.0;
 
-    if vertical > 0.0 {
-        Direction::Up
-    } else {
-        Direction::Down
+/// A scroll in notches, whichever units the pointer reports in.
+fn notches(delta: iced::mouse::ScrollDelta) -> f32 {
+    match delta {
+        iced::mouse::ScrollDelta::Lines { y, .. } => y,
+        iced::mouse::ScrollDelta::Pixels { y, .. } => y / PIXELS_PER_NOTCH,
     }
 }
 
@@ -205,12 +215,28 @@ pub fn update(bar: &mut Bar, message: Message) -> Task<Message> {
             bar.hovered = Some(index);
             open_popup(bar)
         }
-        Message::Scroll(index, direction) => match bar.modules.get_mut(index) {
-            Some(module) => module
-                .update(Event::Scroll(direction))
-                .map(move |event| Message::Module(index, event)),
-            None => Task::none(),
-        },
+        Message::Scroll(index, delta) => {
+            let banked = bar.scrolled.entry(index).or_default();
+            *banked = (*banked + notches(delta)).clamp(-NOTCH_LIMIT, NOTCH_LIMIT);
+
+            // Spend one whole notch, keeping the remainder for the next event.
+            let direction = if *banked >= 1.0 {
+                *banked -= 1.0;
+                Direction::Up
+            } else if *banked <= -1.0 {
+                *banked += 1.0;
+                Direction::Down
+            } else {
+                return Task::none();
+            };
+
+            match bar.modules.get_mut(index) {
+                Some(module) => module
+                    .update(Event::Scroll(direction))
+                    .map(move |event| Message::Module(index, event)),
+                None => Task::none(),
+            }
+        }
         Message::Leave(index) => {
             // A module's popup waits to be clicked, so it must survive the
             // pointer travelling from the module down to it.
@@ -292,7 +318,7 @@ fn open_popup(bar: &mut Bar) -> Task<Message> {
     bar.popup = Some(Popup {
         id,
         module: index,
-        kind: PopupKind::Tooltip(tooltip),
+        kind: PopupKind::Tooltip,
         opened: Instant::now(),
     });
 
@@ -424,7 +450,17 @@ fn popup_view<'a>(bar: &'a Bar, popup: &'a Popup) -> Element<'a, Message> {
     let style = bar.config.bar.style;
 
     let body: Element<'a, Message> = match &popup.kind {
-        PopupKind::Tooltip(tooltip) => text(tooltip.as_str()).wrapping(text::Wrapping::None).into(),
+        PopupKind::Tooltip => {
+            // Read at draw time rather than kept from when it opened, so a
+            // tooltip showing a value follows that value while it is open.
+            let tooltip = bar
+                .modules
+                .get(popup.module)
+                .and_then(|module| module.tooltip())
+                .unwrap_or_default();
+
+            text(tooltip).wrapping(text::Wrapping::None).into()
+        }
         PopupKind::Module => match bar.modules.get(popup.module) {
             Some(module) => {
                 let index = popup.module;
@@ -480,7 +516,7 @@ pub fn view(bar: &Bar, id: window::Id) -> Element<'_, Message> {
                 mouse_area(element)
                     .on_enter(Message::Enter(index))
                     .on_exit(Message::Leave(index))
-                    .on_scroll(move |delta| Message::Scroll(index, direction_of(delta)))
+                    .on_scroll(move |delta| Message::Scroll(index, delta))
                     .into(),
             )
         }))

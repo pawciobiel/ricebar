@@ -14,7 +14,7 @@ use iced::futures::{SinkExt, Stream};
 use iced::widget::{container, text};
 use iced::{Element, Length, Subscription, Task};
 
-use super::{BROKEN, Direction, Event, Module, color_for, icon_for, spawn};
+use super::{BROKEN, Direction, Event, Module, color_for, icon_for};
 use crate::config;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -161,10 +161,21 @@ impl Module for Sensor {
                 };
 
                 if let Some(command) = command {
-                    // Read again straight after, so the bar catches up with
-                    // what the command just changed.
-                    self.refresh();
-                    return spawn(command);
+                    // Wait for the command before reading again: refreshing
+                    // first would show the value from before the change, so
+                    // the bar always lagged a notch behind.
+                    return Task::future(async move {
+                        if let Err(error) = tokio::process::Command::new("sh")
+                            .arg("-c")
+                            .arg(&command)
+                            .status()
+                            .await
+                        {
+                            eprintln!("ricebar: could not run `{command}`: {error}");
+                        }
+
+                        Event::Tick
+                    });
                 }
             }
             _ => {}
