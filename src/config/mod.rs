@@ -201,24 +201,56 @@ pub struct MenuItem {
     pub exec: String,
 }
 
-/// A module that runs a shell command and shows its output.
+/// A module built from scripts: one to produce what it shows, one for hover
+/// text, one for what a click does. Any of the three may be left out.
 #[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+#[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Custom {
     /// The name used in the `modules-*` lists.
     pub name: String,
-    /// Passed to `sh -c`.
-    pub exec: String,
-    /// Seconds between runs.
-    #[serde(default = "one")]
+    /// Passed to `sh -c` to produce what the module shows. Leave it out for a
+    /// module that only ever shows `label`, such as a launcher button.
+    pub exec: Option<String>,
+    /// Keep `exec` running and read a line each time it prints, rather than
+    /// re-running it on a timer. Far cheaper, and updates the moment something
+    /// happens instead of on the next tick.
+    pub stream: bool,
+    /// Seconds between runs. Ignored when streaming.
     pub interval: u64,
+    /// Shown before any output arrives, and instead of it when there is no
+    /// `exec` at all.
+    pub label: String,
+    /// `{icon}` and `{value}` are replaced.
+    pub format: String,
+    /// Lowest level first, chosen by the `percentage` a command reports.
+    pub icons: Vec<String>,
     /// Shown on hover, unless the command prints its own.
-    #[serde(default)]
     pub tooltip: Option<String>,
+    /// Passed to `sh -c` when the module is clicked. Setting it is what makes
+    /// the module a button.
+    pub on_click: Option<String>,
+    /// Fill behind this module. Unset draws on the bar's own background.
+    pub background: Option<Rgba>,
+    /// Text colour for this module, overriding the bar's.
+    pub foreground: Option<Rgba>,
 }
 
-fn one() -> u64 {
-    1
+impl Default for Custom {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            exec: None,
+            stream: false,
+            interval: 1,
+            label: String::new(),
+            format: String::from("{icon}{value}"),
+            icons: Vec::new(),
+            tooltip: None,
+            on_click: None,
+            background: None,
+            foreground: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]

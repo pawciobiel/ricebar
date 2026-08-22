@@ -14,7 +14,7 @@ use iced::futures::{SinkExt, Stream};
 use iced::widget::{container, text};
 use iced::{Element, Length, Subscription, Task};
 
-use super::{Event, Module};
+use super::{Event, Module, icon_for};
 use crate::config;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,19 +118,10 @@ impl Sensor {
     }
 
     fn icon(&self) -> &str {
-        if let Some(icon) = self.reading.icon {
-            return icon;
-        }
-
-        if self.icons.is_empty() {
-            return "";
-        }
-
-        // Map the level across the icons, so the last one means full.
-        let last = self.icons.len() - 1;
-        let index = (self.reading.level.clamp(0.0, 1.0) * last as f32).round() as usize;
-
-        &self.icons[index.min(last)]
+        // A charging battery names its own glyph; the rest go by level.
+        self.reading
+            .icon
+            .unwrap_or_else(|| icon_for(self.reading.level, &self.icons))
     }
 
     fn label(&self) -> String {

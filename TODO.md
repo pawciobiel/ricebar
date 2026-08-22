@@ -63,11 +63,35 @@ work does not have to be rediscovered.
 - [ ] **Keyboard layout module.** Needs compositor support: Hyprland reports it
       over `.socket2.sock` (`activelayout>>`), so it likely belongs behind the
       `Compositor` trait rather than in a module reading the compositor itself.
-- [ ] **Click and scroll actions for custom modules.** `on-click`, `on-scroll-up`
-      and similar, as waybar has. The workspaces module already proves the
-      click path end to end.
-- [ ] **`format` templating** so a module's output can be wrapped without the
-      script having to emit the final string, e.g. `format = "  {}"`.
+- [x] **Click actions for custom modules.** `on-click` runs a command and makes
+      the module a button; with no `exec` and only a `label`, that is a
+      launcher. Still to do: **scroll** actions (`on-scroll-up`/`-down`), which
+      backlight and volume both want.
+- [ ] **Graphical icons, and icon themes.** Today a module's icon is a glyph
+      from a font, which limits it to what a Nerd Font carries and to one
+      colour. Two steps:
+
+      1. An image path: `icon = "/usr/share/icons/.../firefox.svg"`. iced can
+         draw both, but its `image` and `svg` widgets are behind cargo
+         features that are not enabled yet, and SVG brings `resvg` in.
+      2. A named lookup against the freedesktop icon theme spec, so
+         `icon-theme = "candy-icons"` plus `icon = "firefox"` resolves through
+         `~/.local/share/icons`, `/usr/share/icons`, size directories and
+         `index.theme` inheritance. Worth using an existing crate rather than
+         implementing the spec.
+
+      Scripts should be able to name one too, so a streaming script can return
+      `{"icon": "audio-volume-high"}` alongside its text.
+- [x] **`format` templating.** `{icon}` and `{value}`, on both custom modules
+      and the built-in sensors.
+- [x] **Streaming scripts.** `stream = true` keeps `exec` running and reads a
+      line per update, so a module can block on `pactl subscribe` and print the
+      moment something happens rather than polling. `percentage` in a script's
+      JSON picks its glyph from `icons` in config, so the script reports a
+      number and the look stays configurable. See `dev/scripts/volume.sh`.
+- [ ] **Signal refresh.** `pkill -RTMIN+8 ricebar` to make a module re-read on
+      demand, as waybar has, for scripts that cannot stream but should update
+      after a keybind rather than on the next tick.
 
 ## waybar parity
 

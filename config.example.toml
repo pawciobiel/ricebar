@@ -22,9 +22,9 @@ vertical-align = "center" # where modules sit in the bar's height: top | center 
 font = "JetBrainsMono Nerd Font"
 font-size = 16
 
-modules-left = ["workspaces"]
+modules-left = ["launcher", "workspaces"]
 modules-center = ["clock"]
-modules-right = ["cpu", "memory", "temperature", "backlight", "battery", "power"]
+modules-right = ["volume", "cpu", "memory", "temperature", "backlight", "battery", "power"]
 
 [bar.style]
 # #rgb, #rgba, #rrggbb and #rrggbbaa all work.
@@ -74,6 +74,36 @@ compositor = "auto"
 #
 # A command may print plain text, or a JSON object with "text" and an optional
 # "tooltip". Anything that fails prints "!" with the reason in its tooltip.
+
+# A module is up to three scripts: `exec` for what it shows, `tooltip` for
+# hover, `on-click` for what a click does. Any of them may be left out.
+#
+# This one has no `exec` at all -- just a label and an action, which is how you
+# get a start-menu button. rofi is told where to appear so it opens under the
+# button rather than mid-screen.
+[[module.custom]]
+name = "launcher"
+label = "\uf009"
+tooltip = "Applications"
+on-click = "rofi -show drun -location 1 -yoffset 32 -xoffset 4"
+
+# A streaming module. `stream = true` keeps the command running and reads a
+# line each time it prints, instead of re-running it on a timer: this one
+# blocks inside `pactl subscribe` and prints the moment the volume moves, so an
+# idle machine costs nothing at all.
+#
+# `percentage` in its JSON picks the glyph from `icons`, lowest first, so the
+# script reports a number and the look stays in config.
+#
+# Copy dev/scripts/volume.sh to ~/.config/ricebar/scripts/ first.
+[[module.custom]]
+name = "volume"
+exec = "~/.config/ricebar/scripts/volume.sh"
+stream = true
+icons = ["\uf026", "\uf027", "\uf028"]
+format = "{icon} {value}"
+on-click = "pavucontrol"
+background = "#313244"
 
 # Readouts from the kernel: cpu, memory, temperature, battery, backlight.
 # `format` takes {icon} and {value}; drop {value} for an icon on its own, the

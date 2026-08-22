@@ -57,6 +57,9 @@ pub struct Popup {
 pub struct Content {
     pub text: String,
     pub tooltip: Option<String>,
+    /// 0 to 100, if the module reported one. Chooses an icon from a config's
+    /// list, so a script reports a number and the look stays configurable.
+    pub percentage: Option<f32>,
 }
 
 impl Content {
@@ -66,8 +69,22 @@ impl Content {
         Self {
             text: String::from("!"),
             tooltip: Some(detail),
+            percentage: None,
         }
     }
+}
+
+/// Pick an icon for how full something is, from a list running low to high.
+///
+/// Shared so a script reporting a percentage and a built-in sensor reading one
+/// choose their glyph the same way.
+pub fn icon_for(level: f32, icons: &[String]) -> &str {
+    let Some(last) = icons.len().checked_sub(1) else {
+        return "";
+    };
+
+    let index = (level.clamp(0.0, 1.0) * last as f32).round() as usize;
+    &icons[index.min(last)]
 }
 
 pub trait Module {
