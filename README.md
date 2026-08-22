@@ -108,7 +108,8 @@ quoted for the shell before substitution.
 
 ```sh
 cargo build --release
-./target/release/ricebar
+./target/release/ricebar                    # the usual config
+./target/release/ricebar -c other.toml      # or a named one
 ```
 
 Needs `wayland-client`, `libxkbcommon`, and a Vulkan driver (iced falls back to a

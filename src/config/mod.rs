@@ -390,7 +390,8 @@ impl Default for Workspaces {
     }
 }
 
-fn path() -> Option<PathBuf> {
+/// Where the config lives when none was named on the command line.
+fn default_path() -> Option<PathBuf> {
     if let Some(dir) = std::env::var_os("XDG_CONFIG_HOME") {
         return Some(PathBuf::from(dir).join("ricebar/config.toml"));
     }
@@ -404,8 +405,11 @@ fn path() -> Option<PathBuf> {
 /// A broken config is reported and then ignored rather than fatal: the bar is
 /// how the desktop is driven, and refusing to start can leave the user with no
 /// visible way to fix the mistake.
-pub fn load() -> Config {
-    let Some(path) = path() else {
+pub fn load(named: Option<PathBuf>) -> Config {
+    // A path given on the command line wins over the usual location.
+    let explicit = named.is_some();
+
+    let Some(path) = named.or_else(default_path) else {
         eprintln!("ricebar: no HOME or XDG_CONFIG_HOME, using defaults");
         return Config::default();
     };
@@ -413,6 +417,11 @@ pub fn load() -> Config {
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            // Missing is unremarkable at the default location, but a path
+            // asked for by name and not there is a mistake worth saying twice.
+            if explicit {
+                eprintln!("ricebar: {} does not exist", path.display());
+            }
             eprintln!("ricebar: no config at {}, using defaults", path.display());
             return Config::default();
         }

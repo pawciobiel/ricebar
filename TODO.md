@@ -146,8 +146,7 @@ state a script cannot see.
       so a `font-files` key could load a font ricebar ships or the user points
       at, for machines where the family is not installed. Today an unknown
       family is silently substituted by fontconfig.
-- [ ] **`--config <path>` flag** for testing and for running two bars with
-      different configs.
+- [x] **`--config <path>` flag**, plus `--help` and `--version`.
 
 ## Rendering
 
