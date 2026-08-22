@@ -45,9 +45,12 @@ impl Kind {
             Self::Memory => &["\u{f0c9}"],
             Self::Temperature => &["\u{f76b}", "\u{f2c9}", "\u{f769}"],
             Self::Battery => &["\u{f244}", "\u{f243}", "\u{f242}", "\u{f241}", "\u{f240}"],
+            // Dim to bright. This ramp is *not* in codepoint order, and
+            // sorting it silently gives a full lamp at 20% and an empty one
+            // at 100%.
             Self::Backlight => &[
-                "\u{e38d}", "\u{e39b}", "\u{e3c8}", "\u{e3ca}", "\u{e3cd}", "\u{e3ce}", "\u{e3cf}",
-                "\u{e3d1}", "\u{e3d3}",
+                "\u{e38d}", "\u{e3d3}", "\u{e3d1}", "\u{e3cf}", "\u{e3ce}", "\u{e3cd}", "\u{e3ca}",
+                "\u{e3c8}", "\u{e39b}",
             ],
         }
     }
@@ -483,4 +486,62 @@ fn ticks(interval: &Duration) -> impl Stream<Item = Event> + use<> {
             }
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::modules::icon_for;
+
+    fn icons(kind: Kind) -> Vec<String> {
+        kind.icons().iter().map(|icon| (*icon).to_owned()).collect()
+    }
+
+    #[test]
+    fn every_ramp_runs_dim_to_bright() {
+        // Not a check of which glyphs, but that the ends are the ends: the
+        // backlight ramp is not in codepoint order, and sorting it put a full
+        // lamp at 20% and an empty one at 100%.
+        for kind in [Kind::Temperature, Kind::Battery, Kind::Backlight] {
+            let icons = icons(kind);
+
+            assert_eq!(icon_for(0.0, &icons), icons[0], "{} lowest", kind.name());
+            assert_eq!(
+                icon_for(1.0, &icons),
+                icons[icons.len() - 1],
+                "{} highest",
+                kind.name()
+            );
+        }
+    }
+
+    #[test]
+    fn the_backlight_ramp_is_the_one_nerd_fonts_ship() {
+        // Written out so a reorder is a failing test rather than a bar that
+        // looks subtly wrong.
+        let expected = [
+            '\u{e38d}', '\u{e3d3}', '\u{e3d1}', '\u{e3cf}', '\u{e3ce}', '\u{e3cd}', '\u{e3ca}',
+            '\u{e3c8}', '\u{e39b}',
+        ];
+
+        let shipped: Vec<char> = Kind::Backlight
+            .icons()
+            .iter()
+            .filter_map(|icon| icon.chars().next())
+            .collect();
+
+        assert_eq!(shipped, expected);
+    }
+
+    #[test]
+    fn a_level_maps_across_the_whole_ramp() {
+        let icons = icons(Kind::Backlight);
+
+        assert_eq!(icon_for(0.0, &icons), icons[0]);
+        assert_eq!(icon_for(0.5, &icons), icons[4]);
+        assert_eq!(icon_for(1.0, &icons), icons[8]);
+        // Out of range cannot wrap round to the other end.
+        assert_eq!(icon_for(1.5, &icons), icons[8]);
+        assert_eq!(icon_for(-0.5, &icons), icons[0]);
+    }
 }
