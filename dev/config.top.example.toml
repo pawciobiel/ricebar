@@ -10,9 +10,8 @@ vertical-align = "center"
 font = "JetBrainsMono Nerd Font"
 font-size = 16
 
-[[bar.row]]
-modules-left = ["launcher", "keybindings", "windows", "workspaces"]
-modules-center = ["clock"]
+modules-left = ["launcher", "keybindings", "windows", "workspaces", "stocks"]
+modules-center = ["clock", "weather"]
 modules-right = [
     "network",
     "volume",
@@ -23,11 +22,6 @@ modules-right = [
     "battery",
     "power",
 ]
-
-[[bar.row]]
-height = 24
-modules-left = ["weather"]
-modules-right = ["kernel"]
 
 [bar.style]
 background = "#1e1e2e"
@@ -127,17 +121,21 @@ on-scroll-up = "pactl set-sink-volume @DEFAULT_SINK@ +5%"
 on-scroll-down = "pactl set-sink-volume @DEFAULT_SINK@ -5%"
 background = "#313244"
 
+# Markets, scrolling past a fixed window so a long feed fits beside the
+# workspaces. Quotes need ~/.config/ricebar/finnhub.token; the indices and the
+# zloty rates need no key.
+[[module.custom]]
+name = "stocks"
+exec = "SYMBOLS='AAPL MSFT NVDA' FX='USD EUR' ~/.config/ricebar/scripts/stocks.sh"
+stream = true
+scroll-width = 38
+scroll-speed = 6
+
 [[module.custom]]
 name = "weather"
 exec = "LOCATION=Lublin ~/.config/ricebar/scripts/weather.sh"
 stream = true
 tooltip = "Fetching weather..."
-
-[[module.custom]]
-name = "kernel"
-exec = "uname -r"
-interval = 3600
-tooltip = "Running kernel"
 
 [[module.menu]]
 name = "power"
