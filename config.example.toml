@@ -32,7 +32,7 @@ font-size = 16
 # left, centre and right, and its own height. The reserved space grows with it,
 # so windows still sit below the whole thing.
 [[bar.row]]
-modules-left = ["launcher", "workspaces"]
+modules-left = ["launcher", "windows", "workspaces"]
 modules-center = ["clock"]
 modules-right = ["volume", "cpu", "memory", "temperature", "backlight", "battery", "power"]
 
@@ -132,6 +132,21 @@ name = "weather"
 exec = "LOCATION=Warsaw ~/.config/ricebar/scripts/weather.sh"
 stream = true
 tooltip = "Fetching weather..."
+
+# A popup built by a script. Clicking runs `popup`, which prints
+#
+#   {"items": [{"label": "shown in the popup", "exec": "run when chosen"}]}
+#
+# and ricebar draws it on its own layer-shell surface. The bar knows nothing
+# about what is in the list -- this one happens to be open windows, and the
+# script works out which compositor is running by itself.
+#
+# Copy dev/scripts/windows-popup.sh to ~/.config/ricebar/scripts/ first.
+[[module.custom]]
+name = "windows"
+label = "\uf2d2"
+tooltip = "Open windows"
+popup = "~/.config/ricebar/scripts/windows-popup.sh"
 
 # A ticker. Content longer than `scroll-width` characters is scrolled past a
 # window of that width, wrapping through a separator -- the second row is where

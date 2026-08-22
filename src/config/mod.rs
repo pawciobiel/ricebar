@@ -277,6 +277,10 @@ pub struct Custom {
     /// Passed to `sh -c` when the module is clicked. Setting it is what makes
     /// the module a button.
     pub on_click: Option<String>,
+    /// Passed to `sh -c` when the module is clicked, and expected to print a
+    /// JSON popup: `{"items": [{"label": "...", "exec": "..."}]}`. Takes
+    /// precedence over `on-click`, which then never runs.
+    pub popup: Option<String>,
     /// Show at most this many characters, scrolling the rest past like a
     /// ticker. Zero shows everything and never scrolls.
     pub scroll_width: usize,
@@ -300,6 +304,7 @@ impl Default for Custom {
             icons: Vec::new(),
             tooltip: None,
             on_click: None,
+            popup: None,
             scroll_width: 0,
             scroll_speed: 4.0,
             background: None,

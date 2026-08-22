@@ -36,6 +36,17 @@ pub enum Event {
     Activate(usize),
     /// The user paged the popup's contents, which leaves it open.
     Step(i32),
+    /// A script produced the entries for a popup, which is what the bar waits
+    /// for before it can size the surface.
+    Entries(Vec<Entry>),
+}
+
+/// One line of a popup a script described.
+#[derive(Debug, Clone)]
+pub struct Entry {
+    pub label: String,
+    /// Passed to `sh -c` when the entry is chosen.
+    pub exec: String,
 }
 
 /// The popup a module opens when clicked: a menu of commands, a calendar, or

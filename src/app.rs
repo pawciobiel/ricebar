@@ -156,6 +156,18 @@ pub fn update(bar: &mut Bar, message: Message) -> Task<Message> {
 
             Task::batch([told, toggle_popup(bar, index)])
         }
+        Message::Module(index, Event::Entries(entries)) => {
+            let told = match bar.modules.get_mut(index) {
+                Some(module) => module
+                    .update(Event::Entries(entries))
+                    .map(move |event| Message::Module(index, event)),
+                None => Task::none(),
+            };
+
+            // A script has answered, so the surface can be sized and shown now
+            // rather than on the click that asked for it.
+            Task::batch([told, show_popup(bar, index)])
+        }
         Message::Module(index, Event::Activate(entry)) => {
             let closed = close_popup(bar);
 
@@ -268,6 +280,23 @@ fn toggle_popup(bar: &mut Bar, index: usize) -> Task<Message> {
         .is_some_and(|popup| popup.module == index && matches!(popup.kind, PopupKind::Module))
     {
         return close_popup(bar);
+    }
+
+    show_popup(bar, index)
+}
+
+/// Open a module's popup, replacing whatever else was open.
+///
+/// A module whose popup comes from a script has nothing to show until that
+/// script answers, which is why this can be reached twice: once from the click
+/// and again when the entries arrive.
+fn show_popup(bar: &mut Bar, index: usize) -> Task<Message> {
+    if bar
+        .popup
+        .as_ref()
+        .is_some_and(|popup| popup.module == index && matches!(popup.kind, PopupKind::Module))
+    {
+        return Task::none();
     }
 
     let Some(shape) = bar.modules.get(index).and_then(|module| module.popup()) else {

@@ -17,12 +17,12 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use iced::futures::{SinkExt, Stream};
-use iced::widget::{button, container, text};
-use iced::{Element, Subscription, Task};
+use iced::widget::{button, column, container, text};
+use iced::{Element, Length, Subscription, Task};
 use serde::Deserialize;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
-use super::{Content, Event, Module, icon_for};
+use super::{Content, Entry, Event, Module, Popup, icon_for};
 use crate::config;
 
 pub struct Custom {
@@ -33,6 +33,13 @@ pub struct Custom {
     format: String,
     icons: Vec<String>,
     on_click: Option<String>,
+    /// A script printing a popup to show when this module is clicked.
+    popup: Option<String>,
+    /// What that script last printed. None until it has run.
+    entries: Option<Vec<Entry>>,
+    /// Whether its popup is showing, so a second click closes rather than
+    /// closing and immediately fetching again.
+    showing: bool,
     ticker: Option<Ticker>,
     background: Option<config::Rgba>,
     foreground: Option<config::Rgba>,
@@ -76,6 +83,9 @@ impl Custom {
             format: config.format.clone(),
             icons: config.icons.clone(),
             on_click: trusted.then(|| config.on_click.clone()).flatten(),
+            popup: trusted.then(|| config.popup.clone()).flatten(),
+            entries: None,
+            showing: false,
             ticker: (config.scroll_width > 0).then(|| Ticker {
                 width: config.scroll_width,
                 step: Duration::from_secs_f32(1.0 / config.scroll_speed.max(0.1)),
@@ -153,8 +163,37 @@ impl Module for Custom {
                     ticker.advance();
                 }
             }
-            Event::Activate(_) => {
-                let Some(command) = self.on_click.clone() else {
+            Event::Entries(entries) => self.entries = Some(entries),
+            Event::TogglePopup => {
+                let Some(script) = self.popup.clone() else {
+                    return Task::none();
+                };
+
+                self.showing = !self.showing;
+
+                if !self.showing {
+                    // Closing. Drop the entries so the next click fetches
+                    // again rather than showing what was true last time.
+                    self.entries = None;
+                    return Task::none();
+                }
+
+                // The surface cannot be sized until the script has answered,
+                // so the bar opens it when these come back, not on the click.
+                return Task::future(async move { Event::Entries(entries_from(&script).await) });
+            }
+            Event::Activate(entry) => {
+                // Choosing an entry closes the popup, so forget it was open.
+                self.showing = false;
+
+                // With a popup open the click is a choice from it; otherwise
+                // it is the module's own action.
+                let command = match &self.entries {
+                    Some(entries) => entries.get(entry).map(|entry| entry.exec.clone()),
+                    None => self.on_click.clone(),
+                };
+
+                let Some(command) = command else {
                     return Task::none();
                 };
 
@@ -181,8 +220,14 @@ impl Module for Custom {
         let foreground = self.foreground.unwrap_or(style.foreground).color();
         let label = text(self.label()).color(foreground);
 
+        let press = if self.popup.is_some() {
+            Some(Event::TogglePopup)
+        } else {
+            self.on_click.as_ref().map(|_| Event::Activate(0))
+        };
+
         // Without an action there is nothing to click, so stay a plain label.
-        let Some(_) = &self.on_click else {
+        let Some(press) = press else {
             let Some(background) = self.background else {
                 return label.into();
             };
@@ -204,7 +249,7 @@ impl Module for Custom {
 
         button(label)
             .padding([2, 6])
-            .on_press(Event::Activate(0))
+            .on_press(press)
             .style(move |_theme, status| button::Style {
                 background: match status {
                     button::Status::Hovered | button::Status::Pressed => {
@@ -224,6 +269,117 @@ impl Module for Custom {
 
     fn tooltip(&self) -> Option<String> {
         self.content.tooltip.clone()
+    }
+
+    fn popup(&self) -> Option<Popup> {
+        let entries = self.entries.as_ref()?;
+
+        if entries.is_empty() {
+            return None;
+        }
+
+        let widest = entries
+            .iter()
+            .map(|entry| entry.label.chars().count())
+            .max()
+            .unwrap_or(0) as f32;
+
+        Some(Popup {
+            // Text cannot be measured outside a renderer, so this over-estimates
+            // rather than risk clipping a label.
+            width: widest.mul_add(ENTRY_GLYPH, 2.0 * ENTRY_PADDING),
+            height: (entries.len() as f32).mul_add(ENTRY_HEIGHT, 2.0 * ENTRY_PADDING),
+        })
+    }
+
+    fn popup_view(&self, style: config::Style) -> Element<'_, Event> {
+        let Some(entries) = &self.entries else {
+            return iced::widget::space::horizontal().into();
+        };
+
+        let rows = entries.iter().enumerate().map(|(index, entry)| {
+            button(text(entry.label.as_str()).wrapping(text::Wrapping::None))
+                .width(Length::Fill)
+                .padding([2, 6])
+                .on_press(Event::Activate(index))
+                .style(move |_theme, status| button::Style {
+                    background: match status {
+                        button::Status::Hovered | button::Status::Pressed => {
+                            Some(style.accent.color().into())
+                        }
+                        _ => None,
+                    },
+                    text_color: match status {
+                        button::Status::Hovered | button::Status::Pressed => {
+                            style.background.color()
+                        }
+                        _ => style.foreground.color(),
+                    },
+                    border: iced::Border {
+                        radius: 4.into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                })
+                .into()
+        });
+
+        column(rows).spacing(2).into()
+    }
+}
+
+/// Per-entry metrics, used to size the surface before anything is drawn.
+const ENTRY_GLYPH: f32 = 9.5;
+const ENTRY_HEIGHT: f32 = 24.0;
+const ENTRY_PADDING: f32 = 10.0;
+
+/// What a popup script prints.
+#[derive(Deserialize)]
+struct PopupOutput {
+    items: Vec<PopupItem>,
+}
+
+#[derive(Deserialize)]
+struct PopupItem {
+    label: String,
+    #[serde(default)]
+    exec: String,
+}
+
+/// Run a popup script and read the entries it describes.
+async fn entries_from(script: &str) -> Vec<Entry> {
+    let run = tokio::process::Command::new("sh")
+        .arg("-c")
+        .arg(script)
+        .output();
+
+    let output = match tokio::time::timeout(Duration::from_secs(5), run).await {
+        Ok(Ok(output)) => output,
+        Ok(Err(error)) => return vec![failed(format!("could not run: {error}"))],
+        Err(_) => return vec![failed(String::from("timed out"))],
+    };
+
+    let printed = String::from_utf8_lossy(&output.stdout);
+
+    match serde_json::from_str::<PopupOutput>(printed.trim()) {
+        Ok(popup) => popup
+            .items
+            .into_iter()
+            .map(|item| Entry {
+                label: item.label,
+                exec: item.exec,
+            })
+            .collect(),
+        Err(error) => vec![failed(format!("bad popup JSON: {error}"))],
+    }
+}
+
+/// Shown in the popup itself, so a broken script says so where it is looked
+/// for rather than only on stderr.
+fn failed(detail: String) -> Entry {
+    Entry {
+        label: detail,
+        exec: String::new(),
     }
 }
 
