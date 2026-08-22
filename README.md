@@ -93,7 +93,8 @@ software renderer via `tiny-skia` if wgpu is unavailable).
 - [x] **M3** Hyprland workspaces
 - [x] **M4** `Module` trait + registry
 - [x] **M5** `[[module.custom]]` script modules
-- [ ] Per-monitor bars (currently every output shows the same content)
+
+What is planned next is in [TODO.md](TODO.md).
 
 ## License
 
