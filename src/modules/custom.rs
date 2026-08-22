@@ -101,6 +101,7 @@ impl Custom {
                 Content {
                     text: config.label.clone(),
                     tooltip: config.tooltip.clone(),
+                    failed: false,
                     percentage: None,
                 }
             } else {
@@ -220,7 +221,12 @@ impl Module for Custom {
     }
 
     fn view(&self, style: config::Style) -> Element<'_, Event> {
-        let foreground = self.foreground.unwrap_or(style.foreground).color();
+        // A failure is worth seeing whatever colour the module was given.
+        let foreground = if self.content.failed {
+            style.urgent.color()
+        } else {
+            self.foreground.unwrap_or(style.foreground).color()
+        };
         let label = text(self.label()).color(foreground);
 
         let press = if self.popup.is_some() {
@@ -539,6 +545,7 @@ fn parse(line: &str) -> Content {
         return Content {
             text: parsed.text,
             tooltip: parsed.tooltip,
+            failed: false,
             percentage: parsed.percentage,
         };
     }
@@ -546,6 +553,7 @@ fn parse(line: &str) -> Content {
     Content {
         text: line.to_owned(),
         tooltip: None,
+        failed: false,
         percentage: None,
     }
 }

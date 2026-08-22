@@ -76,6 +76,9 @@ pub struct Popup {
 pub struct Content {
     pub text: String,
     pub tooltip: Option<String>,
+    /// Whether this is a failure rather than a reading, so the bar can mark it
+    /// without having to guess from the text.
+    pub failed: bool,
     /// 0 to 100, if the module reported one. Chooses an icon from a config's
     /// list, so a script reports a number and the look stays configurable.
     pub percentage: Option<f32>,
@@ -86,12 +89,18 @@ impl Content {
     /// tooltip rather than stretching the bar with a stack trace.
     pub fn error(detail: String) -> Self {
         Self {
-            text: String::from("!"),
+            text: String::from(BROKEN),
             tooltip: Some(detail),
+            failed: true,
             percentage: None,
         }
     }
 }
+
+/// Shown in place of a reading when something is wrong: U+F071, a warning
+/// triangle. One marker everywhere, so a broken module looks broken rather
+/// than looking like a module reporting a question mark.
+pub const BROKEN: &str = "\u{f071}";
 
 /// Run a command and leave it to get on with it.
 ///

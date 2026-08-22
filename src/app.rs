@@ -274,11 +274,18 @@ fn open_popup(bar: &mut Bar) -> Task<Message> {
     let closed = close_popup(bar);
     let id = window::Id::unique();
     // Text cannot be measured outside a renderer, so a tooltip's surface is
-    // estimated from its glyph count, scaled by the bar's font size.
+    // estimated from its longest line and how many lines there are.
     let font_size = bar.config.bar.font_size;
-    let width = (tooltip.chars().count() as f32)
-        .mul_add(font_size * TOOLTIP_GLYPH_RATIO, 2.0 * TOOLTIP_PADDING);
-    let height = font_size.mul_add(TOOLTIP_LINE_RATIO, 2.0 * TOOLTIP_PADDING);
+
+    let widest = tooltip
+        .lines()
+        .map(|line| line.chars().count())
+        .max()
+        .unwrap_or_default() as f32;
+    let lines = tooltip.lines().count().max(1) as f32;
+
+    let width = widest.mul_add(font_size * TOOLTIP_GLYPH_RATIO, 2.0 * TOOLTIP_PADDING);
+    let height = lines.mul_add(font_size * TOOLTIP_LINE_RATIO, 2.0 * TOOLTIP_PADDING);
 
     let settings = popup_settings(bar, index, width, height, true);
 

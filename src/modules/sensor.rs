@@ -14,7 +14,7 @@ use iced::futures::{SinkExt, Stream};
 use iced::widget::{container, text};
 use iced::{Element, Length, Subscription, Task};
 
-use super::{Direction, Event, Module, icon_for, spawn};
+use super::{BROKEN, Direction, Event, Module, icon_for, spawn};
 use crate::config;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,6 +62,8 @@ struct Reading {
     tooltip: String,
     /// Overrides the level-chosen icon, for a battery that is charging.
     icon: Option<&'static str>,
+    /// The sensor could not be read.
+    failed: bool,
 }
 
 pub struct Sensor {
@@ -74,8 +76,10 @@ pub struct Sensor {
     background: Option<config::Rgba>,
     foreground: Option<config::Rgba>,
     reading: Reading,
-    /// Previous `/proc/stat` totals; CPU load is the change between reads.
-    previous: Option<(u64, u64)>,
+    /// Previous `/proc/stat` totals, the whole machine first and then each
+    /// core. CPU load is the change between reads, so there is nothing to
+    /// report until the second one.
+    previous: Vec<(u64, u64)>,
 }
 
 impl Sensor {
@@ -97,7 +101,7 @@ impl Sensor {
             background: config.background,
             foreground: config.foreground,
             reading: Reading::default(),
-            previous: None,
+            previous: Vec::new(),
         };
 
         sensor.refresh();
@@ -115,9 +119,10 @@ impl Sensor {
 
         self.reading = reading.unwrap_or_else(|| Reading {
             level: 0.0,
-            value: String::from("?"),
-            tooltip: format!("{} is unavailable", self.kind.name()),
-            icon: None,
+            value: String::new(),
+            tooltip: format!("{} could not be read", self.kind.name()),
+            icon: Some(BROKEN),
+            failed: true,
         });
     }
 
@@ -167,7 +172,12 @@ impl Module for Sensor {
     }
 
     fn view(&self, style: config::Style) -> Element<'_, Event> {
-        let foreground = self.foreground.map_or(style.foreground, |colour| colour);
+        // A failure is worth seeing whatever colour the module was given.
+        let foreground = if self.reading.failed {
+            style.urgent
+        } else {
+            self.foreground.unwrap_or(style.foreground)
+        };
         let label = text(self.label()).color(foreground.color());
 
         let Some(background) = self.background else {
@@ -194,42 +204,100 @@ impl Module for Sensor {
 }
 
 /// Share of time not spent idle, between this read and the last.
-fn cpu(previous: &mut Option<(u64, u64)>) -> Option<Reading> {
+///
+/// The tooltip lists every core, which is the question you actually have when
+/// one number says the machine is busy.
+fn cpu(previous: &mut Vec<(u64, u64)>) -> Option<Reading> {
     let stat = fs::read_to_string("/proc/stat").ok()?;
-    let line = stat.lines().next()?.strip_prefix("cpu ")?;
 
-    let fields: Vec<u64> = line
-        .split_whitespace()
-        .filter_map(|field| field.parse().ok())
+    // The `cpu` line is the whole machine; `cpu0`, `cpu1` and so on are cores.
+    let samples: Vec<(u64, u64)> = stat
+        .lines()
+        .filter(|line| line.starts_with("cpu"))
+        .filter_map(sample)
         .collect();
 
-    // user nice system idle iowait ...; idle and iowait are both idle time.
-    let total: u64 = fields.iter().sum();
-    let idle = fields.get(3)? + fields.get(4)?;
+    if samples.is_empty() {
+        return None;
+    }
 
-    let level = match previous.replace((total, idle)) {
-        Some((was_total, was_idle)) => {
-            let spent = total.saturating_sub(was_total);
-            let rested = idle.saturating_sub(was_idle);
+    let before = std::mem::replace(previous, samples.clone());
 
-            if spent == 0 {
-                0.0
-            } else {
-                1.0 - (rested as f32 / spent as f32)
-            }
+    let busy = |index: usize| -> f32 {
+        let (total, idle) = samples[index];
+        let Some(&(was_total, was_idle)) = before.get(index) else {
+            // The first read has nothing to compare against.
+            return 0.0;
+        };
+
+        let spent = total.saturating_sub(was_total);
+        let rested = idle.saturating_sub(was_idle);
+
+        if spent == 0 {
+            0.0
+        } else {
+            (1.0 - rested as f32 / spent as f32).clamp(0.0, 1.0)
         }
-        // The first read has nothing to compare against.
-        None => 0.0,
     };
 
-    let percent = (level.clamp(0.0, 1.0) * 100.0).round();
+    let level = busy(0);
+    let cores: Vec<f32> = (1..samples.len()).map(busy).collect();
 
     Some(Reading {
         level,
-        value: format!("{percent:.0}%"),
-        tooltip: format!("CPU {percent:.0}%"),
+        value: format!("{:.0}%", level * 100.0),
+        tooltip: core_grid(&cores, level),
         icon: None,
+        failed: false,
     })
+}
+
+/// How the core grid is shaped: cores are laid out in this many columns, but
+/// never more than this many rows, so a 128-core machine widens rather than
+/// growing a tooltip taller than the screen.
+const GRID_COLUMNS: usize = 4;
+const GRID_MAX_ROWS: usize = 8;
+
+/// One core per cell, filling each column top to bottom.
+fn core_grid(cores: &[f32], overall: f32) -> String {
+    if cores.is_empty() {
+        return format!("CPU {:.0}%", overall * 100.0);
+    }
+
+    let rows = cores.len().div_ceil(GRID_COLUMNS).clamp(1, GRID_MAX_ROWS);
+    let columns = cores.len().div_ceil(rows);
+
+    let mut grid = format!("CPU {:.0}%\n", overall * 100.0);
+
+    for row in 0..rows {
+        for column in 0..columns {
+            let core = column * rows + row;
+
+            if let Some(load) = cores.get(core) {
+                grid.push_str(&format!("  {core:>2} {:>3.0}%", load * 100.0));
+            }
+        }
+        grid.push('\n');
+    }
+
+    grid.trim_end().to_owned()
+}
+
+/// Where each figure sits on a `/proc/stat` cpu line once the label is
+/// dropped: user, nice, system, idle, iowait, irq, softirq, steal, ...
+const IDLE: usize = 3;
+const IOWAIT: usize = 4;
+
+/// Total and idle jiffies from one `/proc/stat` line.
+fn sample(line: &str) -> Option<(u64, u64)> {
+    let fields: Vec<u64> = line
+        .split_whitespace()
+        .skip(1)
+        .filter_map(|field| field.parse().ok())
+        .collect();
+
+    // Waiting on IO is idle time too: the core had nothing else to run.
+    Some((fields.iter().sum(), fields.get(IDLE)? + fields.get(IOWAIT)?))
 }
 
 fn memory() -> Option<Reading> {
@@ -257,6 +325,7 @@ fn memory() -> Option<Reading> {
         value: format!("{:.0}%", level * 100.0),
         tooltip: format!("{:.1} GiB of {:.1} GiB used", gib(used), gib(total)),
         icon: None,
+        failed: false,
     })
 }
 
@@ -270,6 +339,7 @@ fn temperature() -> Option<Reading> {
         value: format!("{degrees:.0}\u{b0}C"),
         tooltip: format!("{degrees:.1}\u{b0}C"),
         icon: None,
+        failed: false,
     })
 }
 
@@ -319,6 +389,7 @@ fn battery() -> Option<Reading> {
             format!("Battery {capacity:.0}% \u{2014} {status}")
         },
         icon,
+        failed: false,
     })
 }
 
@@ -358,6 +429,7 @@ fn backlight() -> Option<Reading> {
         value: format!("{:.0}%", level * 100.0),
         tooltip: format!("Backlight {:.0}%", level * 100.0),
         icon: None,
+        failed: false,
     })
 }
 
