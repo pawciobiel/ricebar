@@ -14,7 +14,7 @@ use iced::futures::{SinkExt, Stream};
 use iced::widget::{container, text};
 use iced::{Element, Length, Subscription, Task};
 
-use super::{Event, Module, icon_for};
+use super::{Direction, Event, Module, icon_for, spawn};
 use crate::config;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,6 +69,8 @@ pub struct Sensor {
     format: String,
     icons: Vec<String>,
     interval: Duration,
+    on_scroll_up: Option<String>,
+    on_scroll_down: Option<String>,
     background: Option<config::Rgba>,
     foreground: Option<config::Rgba>,
     reading: Reading,
@@ -90,6 +92,8 @@ impl Sensor {
             icons,
             // A zero interval would read as fast as the loop can turn.
             interval: Duration::from_secs(config.interval.max(1)),
+            on_scroll_up: config.on_scroll_up.clone(),
+            on_scroll_down: config.on_scroll_down.clone(),
             background: config.background,
             foreground: config.foreground,
             reading: Reading::default(),
@@ -141,9 +145,24 @@ impl Module for Sensor {
     }
 
     fn update(&mut self, event: Event) -> Task<Event> {
-        if matches!(event, Event::Tick) {
-            self.refresh();
+        match event {
+            Event::Tick => self.refresh(),
+            Event::Scroll(direction) => {
+                let command = match direction {
+                    Direction::Up => self.on_scroll_up.clone(),
+                    Direction::Down => self.on_scroll_down.clone(),
+                };
+
+                if let Some(command) = command {
+                    // Read again straight after, so the bar catches up with
+                    // what the command just changed.
+                    self.refresh();
+                    return spawn(command);
+                }
+            }
+            _ => {}
         }
+
         Task::none()
     }
 

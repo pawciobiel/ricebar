@@ -36,9 +36,17 @@ pub enum Event {
     Activate(usize),
     /// The user paged the popup's contents, which leaves it open.
     Step(i32),
+    /// The wheel turned over the module, away from the user or towards them.
+    Scroll(Direction),
     /// A script produced the entries for a popup, which is what the bar waits
     /// for before it can size the surface.
     Entries(Vec<Entry>),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Direction {
+    Up,
+    Down,
 }
 
 /// One line of a popup a script described.
@@ -83,6 +91,23 @@ impl Content {
             percentage: None,
         }
     }
+}
+
+/// Run a command and leave it to get on with it.
+///
+/// Detached on purpose: these launch things, change the volume, power the
+/// machine off. Waiting on one would hold up the bar while it happened.
+pub fn spawn(command: String) -> Task<Event> {
+    Task::future(async move {
+        if let Err(error) = tokio::process::Command::new("sh")
+            .arg("-c")
+            .arg(&command)
+            .spawn()
+        {
+            eprintln!("ricebar: could not run `{command}`: {error}");
+        }
+    })
+    .discard()
 }
 
 /// Pick an icon for how full something is, from a list running low to high.

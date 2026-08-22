@@ -8,7 +8,7 @@ use iced_layershell::reexport::{
 use iced_layershell::to_layer_message;
 
 use crate::config;
-use crate::modules::{self, Event, Module};
+use crate::modules::{self, Direction, Event, Module};
 
 /// Everything the bar knows. `update` is the only thing allowed to change it.
 pub struct Bar {
@@ -123,6 +123,21 @@ pub enum Message {
     Enter(usize),
     /// The pointer left the module at this index.
     Leave(usize),
+    /// The wheel turned over the module at this index.
+    Scroll(usize, Direction),
+}
+
+/// Which way a wheel turn went, whichever units the pointer reports in.
+fn direction_of(delta: iced::mouse::ScrollDelta) -> Direction {
+    let vertical = match delta {
+        iced::mouse::ScrollDelta::Lines { y, .. } | iced::mouse::ScrollDelta::Pixels { y, .. } => y,
+    };
+
+    if vertical > 0.0 {
+        Direction::Up
+    } else {
+        Direction::Down
+    }
 }
 
 pub fn namespace() -> String {
@@ -190,6 +205,12 @@ pub fn update(bar: &mut Bar, message: Message) -> Task<Message> {
             bar.hovered = Some(index);
             open_popup(bar)
         }
+        Message::Scroll(index, direction) => match bar.modules.get_mut(index) {
+            Some(module) => module
+                .update(Event::Scroll(direction))
+                .map(move |event| Message::Module(index, event)),
+            None => Task::none(),
+        },
         Message::Leave(index) => {
             // A module's popup waits to be clicked, so it must survive the
             // pointer travelling from the module down to it.
@@ -452,6 +473,7 @@ pub fn view(bar: &Bar, id: window::Id) -> Element<'_, Message> {
                 mouse_area(element)
                     .on_enter(Message::Enter(index))
                     .on_exit(Message::Leave(index))
+                    .on_scroll(move |delta| Message::Scroll(index, direction_of(delta)))
                     .into(),
             )
         }))

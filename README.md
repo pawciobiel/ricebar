@@ -65,8 +65,9 @@ exec = "free -m | awk '/^Mem:/ {printf \"%.0f%%\", $3/$2*100}'"
 interval = 5
 ```
 
-A module is up to three scripts: `exec` for what it shows, `tooltip` for hover,
-`on-click` for what a click does. Any may be left out — a `label` and an
+A module is made of scripts: `exec` for what it shows, `tooltip` for hover,
+`on-click` for a click, `on-scroll-up`/`on-scroll-down` for the wheel, and
+`popup` for a list to open. Any may be left out — a `label` and an
 `on-click` with no `exec` is a launcher button.
 
 Hovering a module opens a tooltip on its own layer-shell surface, so it is not

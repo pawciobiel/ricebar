@@ -209,6 +209,10 @@ pub struct Sensor {
     pub icons: Vec<String>,
     /// Seconds between reads.
     pub interval: u64,
+    /// Passed to `sh -c` when the wheel turns over the module. Backlight and
+    /// volume are the obvious ones to wire up.
+    pub on_scroll_up: Option<String>,
+    pub on_scroll_down: Option<String>,
     /// Fill behind this module. Unset draws on the bar's own background.
     pub background: Option<Rgba>,
     /// Text colour for this module, overriding the bar's.
@@ -221,6 +225,8 @@ impl Default for Sensor {
             format: String::from("{icon} {value}"),
             icons: Vec::new(),
             interval: 5,
+            on_scroll_up: None,
+            on_scroll_down: None,
             background: None,
             foreground: None,
         }
@@ -281,6 +287,9 @@ pub struct Custom {
     /// JSON popup: `{"items": [{"label": "...", "exec": "..."}]}`. Takes
     /// precedence over `on-click`, which then never runs.
     pub popup: Option<String>,
+    /// Passed to `sh -c` when the wheel turns over the module.
+    pub on_scroll_up: Option<String>,
+    pub on_scroll_down: Option<String>,
     /// Show at most this many characters, scrolling the rest past like a
     /// ticker. Zero shows everything and never scrolls.
     pub scroll_width: usize,
@@ -305,6 +314,8 @@ impl Default for Custom {
             tooltip: None,
             on_click: None,
             popup: None,
+            on_scroll_up: None,
+            on_scroll_down: None,
             scroll_width: 0,
             scroll_speed: 4.0,
             background: None,

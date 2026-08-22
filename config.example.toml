@@ -119,6 +119,8 @@ stream = true
 icons = ["\uf026", "\uf027", "\uf028"]
 format = "{icon} {value}"
 on-click = "pavucontrol"
+on-scroll-up = "pactl set-sink-volume @DEFAULT_SINK@ +5%"
+on-scroll-down = "pactl set-sink-volume @DEFAULT_SINK@ -5%"
 background = "#313244"
 
 # Weather, streamed: the script sleeps between fetches and prints a line each
@@ -214,6 +216,10 @@ foreground = "#f9e2af"
 format = "{icon} {value}"
 interval = 5
 background = "#313244"
+# Turn the wheel over the module to change it. brightnessctl needs either the
+# video group or its setuid helper.
+on-scroll-up = "brightnessctl set +5%"
+on-scroll-down = "brightnessctl set 5%-"
 
 [module.battery]
 format = "{icon} {value}"

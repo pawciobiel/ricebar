@@ -22,7 +22,7 @@ use iced::{Element, Length, Subscription, Task};
 use serde::Deserialize;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
-use super::{Content, Entry, Event, Module, Popup, icon_for};
+use super::{Content, Direction, Entry, Event, Module, Popup, icon_for, spawn};
 use crate::config;
 
 pub struct Custom {
@@ -33,6 +33,8 @@ pub struct Custom {
     format: String,
     icons: Vec<String>,
     on_click: Option<String>,
+    on_scroll_up: Option<String>,
+    on_scroll_down: Option<String>,
     /// A script printing a popup to show when this module is clicked.
     popup: Option<String>,
     /// What that script last printed. None until it has run.
@@ -83,6 +85,8 @@ impl Custom {
             format: config.format.clone(),
             icons: config.icons.clone(),
             on_click: trusted.then(|| config.on_click.clone()).flatten(),
+            on_scroll_up: trusted.then(|| config.on_scroll_up.clone()).flatten(),
+            on_scroll_down: trusted.then(|| config.on_scroll_down.clone()).flatten(),
             popup: trusted.then(|| config.popup.clone()).flatten(),
             entries: None,
             showing: false,
@@ -164,6 +168,16 @@ impl Module for Custom {
                 }
             }
             Event::Entries(entries) => self.entries = Some(entries),
+            Event::Scroll(direction) => {
+                let command = match direction {
+                    Direction::Up => self.on_scroll_up.clone(),
+                    Direction::Down => self.on_scroll_down.clone(),
+                };
+
+                if let Some(command) = command {
+                    return spawn(command);
+                }
+            }
             Event::TogglePopup => {
                 let Some(script) = self.popup.clone() else {
                     return Task::none();
@@ -197,18 +211,7 @@ impl Module for Custom {
                     return Task::none();
                 };
 
-                return Task::future(async move {
-                    // Detached: a launcher should not hold up the bar while the
-                    // thing it launched is open.
-                    if let Err(error) = tokio::process::Command::new("sh")
-                        .arg("-c")
-                        .arg(&command)
-                        .spawn()
-                    {
-                        eprintln!("ricebar: could not run `{command}`: {error}");
-                    }
-                })
-                .discard();
+                return spawn(command);
             }
             _ => {}
         }

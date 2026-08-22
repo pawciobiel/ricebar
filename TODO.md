@@ -65,8 +65,9 @@ work does not have to be rediscovered.
       `Compositor` trait rather than in a module reading the compositor itself.
 - [x] **Click actions for custom modules.** `on-click` runs a command and makes
       the module a button; with no `exec` and only a `label`, that is a
-      launcher. Still to do: **scroll** actions (`on-scroll-up`/`-down`), which
-      backlight and volume both want.
+      launcher.
+- [x] **Scroll actions.** `on-scroll-up`/`on-scroll-down` on custom modules and
+      on the built-in sensors, which is what backlight and volume wanted.
 - [ ] **Graphical icons, and icon themes.** Today a module's icon is a glyph
       from a font, which limits it to what a Nerd Font carries and to one
       colour. Two steps:
@@ -109,8 +110,8 @@ state a script cannot see.
 - [x] **battery** — done. Shows a plug on mains and the level glyph on
       battery, with the percentage either way. Outstanding: warning and
       critical states.
-- [x] **backlight** — done, nine icons by brightness. Outstanding: scroll to
-      change, which needs scroll events on modules.
+- [x] **backlight** — done, nine icons by brightness, and scrolling over it
+      changes the brightness.
 - [ ] **pulseaudio** — `U+F026` `U+F027` `U+F028` by volume, `U+F131` muted,
       plus per-device icons (headphone `U+F025`, headset `U+F590`,
       phone `U+F095`, portable `U+F10B`, car `U+F1B9`). Scroll to change,
