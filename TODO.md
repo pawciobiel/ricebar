@@ -66,8 +66,11 @@ state a script cannot see.
       (`hyprland-submap.sh`); needs `activesubmap>>` from the event socket.
 - [ ] **media** — `U+F1BC` player-specific icons, scrolling title, playerctl or
       MPRIS over D-Bus.
-- [ ] **clock calendar tooltip** — waybar renders a month calendar in the
-      tooltip and scrolls through months. Ours shows a formatted date only.
+- [x] **clock calendar** — done, and deliberately not as a tooltip: clicking
+      opens a real surface with week numbers, today marked, month arrows and a
+      configurable `on-click-day`. Hover keeps its own separate tooltip.
+      Outstanding: the calendar draws at a fixed 13px rather than following
+      `font-size`, because its surface is sized before anything is drawn.
 - [ ] **separator** (`" | "`) and **static launcher icons** such as
       `U+2328` key bindings and `U+1F5A5` monitor toggle — both are a label
       plus `on-click`, so they fall out of click actions for custom modules.
