@@ -29,10 +29,25 @@ pub enum Event {
     FocusWorkspace(i32),
     /// A module produced new content to display.
     Content(Content),
-    /// The user clicked a module that owns a menu.
-    ToggleMenu,
-    /// The user chose the menu entry at this index.
+    /// The user clicked a module that owns a popup.
+    TogglePopup,
+    /// The user chose the entry at this index, which closes the popup.
     Activate(usize),
+    /// The user paged the popup's contents, which leaves it open.
+    Step(i32),
+}
+
+/// The popup a module opens when clicked: a menu of commands, a calendar, or
+/// whatever else it draws.
+///
+/// The module says how big it needs to be and what goes in it; creating and
+/// destroying the surface is the bar's business.
+#[derive(Debug, Clone, Copy)]
+pub struct Popup {
+    /// Roughly how many characters wide.
+    pub columns: usize,
+    /// Roughly how many lines tall.
+    pub rows: usize,
 }
 
 /// What a module shows: a label, and optionally something longer to reveal on
@@ -69,15 +84,23 @@ pub trait Module {
     /// Render, using the bar's palette.
     fn view(&self, style: config::Style) -> Element<'_, Event>;
 
-    /// Text to reveal in a popup while the pointer rests on this module.
+    /// Text to reveal while the pointer rests on this module.
+    ///
+    /// Independent of [`Module::popup`]: a module may have either, both or
+    /// neither. Hovering shows this; clicking opens that.
     fn tooltip(&self) -> Option<String> {
         None
     }
 
-    /// Entries to show when this module is clicked. The surface holding them is
-    /// the bar's business, not the module's, so this only describes them.
-    fn menu(&self) -> Option<&[config::MenuItem]> {
+    /// The popup this module opens when clicked, if it has one.
+    fn popup(&self) -> Option<Popup> {
         None
+    }
+
+    /// Draw that popup. Only called for modules that return a [`Popup`].
+    fn popup_view(&self, style: config::Style) -> Element<'_, Event> {
+        let _ = style;
+        iced::widget::space::horizontal().into()
     }
 }
 

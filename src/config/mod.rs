@@ -101,6 +101,8 @@ pub struct Style {
     pub muted: Rgba,
     /// Text of an item that is present but empty.
     pub dim: Rgba,
+    /// Something that wants attention, such as today in the calendar.
+    pub urgent: Rgba,
     pub border_color: Rgba,
     pub border_width: f32,
     pub border_radius: f32,
@@ -114,6 +116,7 @@ impl Default for Style {
             accent: Rgba::new(0x89, 0xb4, 0xfa),
             muted: Rgba::new(0x45, 0x47, 0x5a),
             dim: Rgba::new(0x6c, 0x70, 0x86),
+            urgent: Rgba::new(0xf3, 0x8b, 0xa8),
             border_color: Rgba::new(0x89, 0xb4, 0xfa),
             border_width: 0.0,
             border_radius: 0.0,
@@ -181,10 +184,17 @@ fn one() -> u64 {
 pub struct Clock {
     /// strftime format.
     pub format: String,
-    /// strftime format shown in the hover popup.
+    /// strftime format shown on hover. Independent of the calendar: a clock may
+    /// have either, both or neither.
     pub tooltip_format: String,
     /// Seconds between redraws.
     pub interval: u64,
+    /// Open a calendar when the clock is clicked.
+    pub calendar: bool,
+    /// Show ISO week numbers down the left of the calendar.
+    pub week_numbers: bool,
+    /// Start weeks on Monday rather than Sunday.
+    pub start_monday: bool,
 }
 
 impl Default for Clock {
@@ -193,6 +203,9 @@ impl Default for Clock {
             format: String::from("%Y-%m-%d %H:%M:%S"),
             tooltip_format: String::from("%A, %-d %B %Y"),
             interval: 1,
+            calendar: true,
+            week_numbers: true,
+            start_monday: true,
         }
     }
 }

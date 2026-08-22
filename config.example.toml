@@ -33,14 +33,21 @@ foreground = "#cdd6f4"
 accent = "#89b4fa"        # fill behind the focused item
 muted = "#45475a"         # fill behind an active but unfocused item
 dim = "#6c7086"           # text of an empty item
+urgent = "#f38ba8"        # wants attention, e.g. today in the calendar
 border-color = "#89b4fa"
 border-width = 0
 border-radius = 0
 
 [module.clock]
 format = "%Y-%m-%d %H:%M:%S"
-tooltip-format = "%A, %-d %B %Y"   # shown on hover
 interval = 1                       # seconds
+
+# Hover and click are separate. `tooltip-format` is what hovering shows;
+# `calendar` is what clicking opens. Either can be used without the other.
+tooltip-format = "%A, %-d %B %Y"
+calendar = true                    # click the clock for a month view
+week-numbers = true                # ISO week numbers down the left
+start-monday = true                # false starts weeks on Sunday
 
 [module.workspaces]
 show-empty = true

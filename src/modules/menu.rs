@@ -3,10 +3,10 @@
 //! The module owns the entries and runs whichever one is chosen. Presenting
 //! them is the bar's job, since the menu needs a surface of its own.
 
-use iced::widget::{button, text};
-use iced::{Element, Task};
+use iced::widget::{button, column, text};
+use iced::{Element, Length, Task};
 
-use super::{Event, Module};
+use super::{Event, Module, Popup};
 use crate::config;
 
 pub struct Menu {
@@ -61,7 +61,7 @@ impl Module for Menu {
     fn view(&self, style: config::Style) -> Element<'_, Event> {
         button(text(self.label.as_str()))
             .padding([2, 6])
-            .on_press(Event::ToggleMenu)
+            .on_press(Event::TogglePopup)
             .style(move |_theme, status| button::Style {
                 background: match status {
                     button::Status::Hovered | button::Status::Pressed => {
@@ -83,7 +83,46 @@ impl Module for Menu {
         self.tooltip.clone()
     }
 
-    fn menu(&self) -> Option<&[config::MenuItem]> {
-        Some(&self.items)
+    fn popup(&self) -> Option<Popup> {
+        Some(Popup {
+            columns: self
+                .items
+                .iter()
+                .map(|item| item.label.chars().count())
+                .max()
+                .unwrap_or(0),
+            rows: self.items.len(),
+        })
+    }
+
+    fn popup_view(&self, style: config::Style) -> Element<'_, Event> {
+        let entries = self.items.iter().enumerate().map(|(entry, item)| {
+            button(text(item.label.as_str()).wrapping(text::Wrapping::None))
+                .width(Length::Fill)
+                .padding([2, 6])
+                .on_press(Event::Activate(entry))
+                .style(move |_theme, status| button::Style {
+                    background: match status {
+                        button::Status::Hovered | button::Status::Pressed => {
+                            Some(style.accent.color().into())
+                        }
+                        _ => None,
+                    },
+                    text_color: match status {
+                        button::Status::Hovered | button::Status::Pressed => {
+                            style.background.color()
+                        }
+                        _ => style.foreground.color(),
+                    },
+                    border: iced::Border {
+                        radius: 4.into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                })
+                .into()
+        });
+
+        column(entries).spacing(2).into()
     }
 }
