@@ -2,7 +2,7 @@
 
 [bar]
 position = "top"
-height = 32
+height = 28
 exclusive = true
 spacing = 8
 padding = 8
@@ -128,8 +128,8 @@ background = "#313244"
 name = "stocks"
 exec = "SYMBOLS='AAPL MSFT NVDA' FX='USD EUR' ~/.config/ricebar/scripts/stocks.sh"
 stream = true
-scroll-width = 38
-scroll-speed = 6
+scroll-width = 28
+scroll-speed = 3
 
 [[module.custom]]
 name = "weather"
