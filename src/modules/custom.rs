@@ -22,7 +22,7 @@ use iced::{Element, Length, Subscription, Task};
 use serde::Deserialize;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
-use super::{Content, Direction, Entry, Event, Module, Popup, icon_for, spawn};
+use super::{Content, Direction, Entry, Event, Module, Popup, color_for, icon_for, spawn};
 use crate::config;
 
 pub struct Custom {
@@ -32,6 +32,7 @@ pub struct Custom {
     label: String,
     format: String,
     icons: Vec<String>,
+    colors: Vec<config::Rgba>,
     on_click: Option<String>,
     on_scroll_up: Option<String>,
     on_scroll_down: Option<String>,
@@ -84,6 +85,7 @@ impl Custom {
             label: config.label.clone(),
             format: config.format.clone(),
             icons: config.icons.clone(),
+            colors: config.colors.clone(),
             on_click: trusted.then(|| config.on_click.clone()).flatten(),
             on_scroll_up: trusted.then(|| config.on_scroll_up.clone()).flatten(),
             on_scroll_down: trusted.then(|| config.on_scroll_down.clone()).flatten(),
@@ -225,7 +227,12 @@ impl Module for Custom {
         let foreground = if self.content.failed {
             style.urgent.color()
         } else {
-            self.foreground.unwrap_or(style.foreground).color()
+            self.content
+                .percentage
+                .and_then(|percentage| color_for(percentage / 100.0, &self.colors))
+                .or(self.foreground)
+                .unwrap_or(style.foreground)
+                .color()
         };
         let label = text(self.label()).color(foreground);
 

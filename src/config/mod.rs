@@ -207,6 +207,10 @@ pub struct Sensor {
     pub format: String,
     /// Lowest level first. Empty uses the built-in set for that sensor.
     pub icons: Vec<String>,
+    /// Text colours, lowest level first, chosen the same way as `icons`:
+    /// green, amber, red reads as fine, busy, struggling. Empty uses
+    /// `foreground`.
+    pub colors: Vec<Rgba>,
     /// Seconds between reads.
     pub interval: u64,
     /// Passed to `sh -c` when the wheel turns over the module. Backlight and
@@ -224,6 +228,7 @@ impl Default for Sensor {
         Self {
             format: String::from("{icon} {value}"),
             icons: Vec::new(),
+            colors: Vec::new(),
             interval: 5,
             on_scroll_up: None,
             on_scroll_down: None,
@@ -278,6 +283,8 @@ pub struct Custom {
     pub format: String,
     /// Lowest level first, chosen by the `percentage` a command reports.
     pub icons: Vec<String>,
+    /// Text colours, chosen the same way as `icons`.
+    pub colors: Vec<Rgba>,
     /// Shown on hover, unless the command prints its own.
     pub tooltip: Option<String>,
     /// Passed to `sh -c` when the module is clicked. Setting it is what makes
@@ -311,6 +318,7 @@ impl Default for Custom {
             label: String::new(),
             format: String::from("{icon}{value}"),
             icons: Vec::new(),
+            colors: Vec::new(),
             tooltip: None,
             on_click: None,
             popup: None,

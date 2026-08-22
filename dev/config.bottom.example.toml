@@ -1,0 +1,48 @@
+# ricebar — bottom bar, a second instance:
+#
+#   ricebar --config ~/.config/ricebar/bottom.toml
+#
+# A bar anchors to one edge, so a second edge means a second process. They know
+# nothing about each other; each reserves its own space.
+
+[bar]
+position = "bottom"
+height = 26
+exclusive = true
+spacing = 8
+padding = 8
+vertical-align = "center"
+font = "JetBrainsMono Nerd Font"
+font-size = 14
+
+modules-left = ["ticker"]
+modules-center = []
+modules-right = ["stocks"]
+
+[bar.style]
+background = "#181825"
+foreground = "#bac2de"
+accent = "#89b4fa"
+muted = "#45475a"
+dim = "#585b70"
+urgent = "#f38ba8"
+border-color = "#89b4fa"
+border-width = 0
+border-radius = 0
+
+# Local facts, scrolling past a window.
+[[module.custom]]
+name = "ticker"
+exec = "~/.config/ricebar/scripts/ticker.sh"
+stream = true
+scroll-width = 52
+scroll-speed = 6
+
+# Markets. Needs ~/.config/ricebar/finnhub.token for the quotes; the indices
+# and the zloty rates need no key.
+[[module.custom]]
+name = "stocks"
+exec = "SYMBOLS='AAPL MSFT NVDA' FX='USD EUR' ~/.config/ricebar/scripts/stocks.sh"
+stream = true
+scroll-width = 44
+scroll-speed = 5

@@ -112,12 +112,16 @@ state a script cannot see.
       critical states.
 - [x] **backlight** — done, nine icons by brightness, and scrolling over it
       changes the brightness.
-- [ ] **pulseaudio** — `U+F026` `U+F027` `U+F028` by volume, `U+F131` muted,
+- [x] **pulseaudio** — done as `dev/scripts/volume.sh`, streaming, with scroll
+      to change and a click to `pavucontrol`.
+- [ ] *(original note)* pulseaudio — `U+F026` `U+F027` `U+F028` by volume, `U+F131` muted,
       plus per-device icons (headphone `U+F025`, headset `U+F590`,
       phone `U+F095`, portable `U+F10B`, car `U+F1B9`). Scroll to change,
       click opens `pavucontrol`.
-- [ ] **network** — `U+F1EB` wifi with essid and signal, `U+F796` ethernet,
-      `U+26A0` disconnected. Tooltip shows interface, address and gateway.
+- [x] **network** — done as `dev/scripts/network.sh`, streaming. Follows
+      whatever holds the default route, so docker and bridge interfaces are
+      ignored without naming them, and uses `ip`/`iw` rather than `nmcli`,
+      which is not installed everywhere NetworkManager is.
 - [ ] **power-profiles-daemon** — `U+F0E7` performance, `U+F24E` balanced,
       `U+F06C` power-saver. D-Bus.
 - [ ] **idle_inhibitor** — `U+F06E` active, `U+F070` inactive. Toggle on click.

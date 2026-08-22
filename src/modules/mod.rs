@@ -132,6 +132,15 @@ pub fn icon_for(level: f32, icons: &[String]) -> &str {
     &icons[index.min(last)]
 }
 
+/// Pick a colour for how full something is, from a list running low to high.
+/// `None` when no colours were configured, so the caller keeps its own.
+pub fn color_for(level: f32, colors: &[config::Rgba]) -> Option<config::Rgba> {
+    let last = colors.len().checked_sub(1)?;
+    let index = (level.clamp(0.0, 1.0) * last as f32).round() as usize;
+
+    colors.get(index.min(last)).copied()
+}
+
 pub trait Module {
     /// The name this module is enabled by in config.
     fn name(&self) -> &str;

@@ -14,7 +14,7 @@ use iced::futures::{SinkExt, Stream};
 use iced::widget::{container, text};
 use iced::{Element, Length, Subscription, Task};
 
-use super::{BROKEN, Direction, Event, Module, icon_for, spawn};
+use super::{BROKEN, Direction, Event, Module, color_for, icon_for, spawn};
 use crate::config;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,6 +71,7 @@ pub struct Sensor {
     format: String,
     icons: Vec<String>,
     interval: Duration,
+    colors: Vec<config::Rgba>,
     on_scroll_up: Option<String>,
     on_scroll_down: Option<String>,
     background: Option<config::Rgba>,
@@ -96,6 +97,7 @@ impl Sensor {
             icons,
             // A zero interval would read as fast as the loop can turn.
             interval: Duration::from_secs(config.interval.max(1)),
+            colors: config.colors.clone(),
             on_scroll_up: config.on_scroll_up.clone(),
             on_scroll_down: config.on_scroll_down.clone(),
             background: config.background,
@@ -176,7 +178,11 @@ impl Module for Sensor {
         let foreground = if self.reading.failed {
             style.urgent
         } else {
-            self.foreground.unwrap_or(style.foreground)
+            // A colour for the level outranks a fixed one: the point is to see
+            // trouble without reading the number.
+            color_for(self.reading.level, &self.colors)
+                .or(self.foreground)
+                .unwrap_or(style.foreground)
         };
         let label = text(self.label()).color(foreground.color());
 

@@ -1,0 +1,150 @@
+# ricebar — top bar. The bottom one is bottom.toml, started separately.
+
+[bar]
+position = "top"
+height = 32
+exclusive = true
+spacing = 8
+padding = 8
+vertical-align = "center"
+font = "JetBrainsMono Nerd Font"
+font-size = 16
+
+[[bar.row]]
+modules-left = ["launcher", "keybindings", "windows", "workspaces"]
+modules-center = ["clock"]
+modules-right = [
+    "network",
+    "volume",
+    "cpu",
+    "memory",
+    "temperature",
+    "backlight",
+    "battery",
+    "power",
+]
+
+[[bar.row]]
+height = 24
+modules-left = ["weather"]
+modules-right = ["kernel"]
+
+[bar.style]
+background = "#1e1e2e"
+foreground = "#cdd6f4"
+accent = "#89b4fa"
+muted = "#45475a"
+dim = "#6c7086"
+urgent = "#f38ba8"
+border-color = "#89b4fa"
+border-width = 0
+border-radius = 0
+
+[module.clock]
+format = "%a %d %b  %H:%M"
+tooltip-format = "%A, %-d %B %Y"
+interval = 1
+calendar = true
+week-numbers = true
+weeks-pos = "right"
+start-monday = true
+on-click-day = "notify-send ricebar {}"
+
+[module.workspaces]
+show-empty = true
+compositor = "auto"
+
+[module.cpu]
+format = "{icon} {value}"
+# fine, busy, struggling -- picked by how high the reading is
+colors = ["#a6e3a1", "#f9e2af", "#f38ba8"]
+interval = 2
+background = "#313244"
+
+[module.memory]
+format = "{icon} {value}"
+# fine, busy, struggling -- picked by how high the reading is
+colors = ["#a6e3a1", "#f9e2af", "#f38ba8"]
+interval = 5
+background = "#313244"
+
+[module.temperature]
+format = "{icon} {value}"
+# fine, busy, struggling -- picked by how high the reading is
+colors = ["#a6e3a1", "#f9e2af", "#f38ba8"]
+interval = 5
+background = "#313244"
+
+[module.backlight]
+format = "{icon} {value}"
+interval = 5
+background = "#313244"
+on-scroll-up = "brightnessctl set +5%"
+on-scroll-down = "brightnessctl set 5%-"
+
+[module.battery]
+format = "{icon} {value}"
+interval = 10
+background = "#313244"
+foreground = "#a6e3a1"
+
+# Start menu.
+[[module.custom]]
+name = "launcher"
+label = ""
+tooltip = "Applications"
+on-click = "rofi -show drun -location 1 -yoffset 56 -xoffset 4"
+
+# Keybindings, through the rofi script already used for this. rofi has a search
+# box, which ricebar's own popups do not, so this stays rofi's job.
+[[module.custom]]
+name = "keybindings"
+label = ""
+tooltip = "Key bindings"
+on-click = "~/.config/hypr/scripts/show_key_bindings.sh"
+
+# Window switcher, drawn by ricebar from what the script prints.
+[[module.custom]]
+name = "windows"
+label = ""
+tooltip = "Open windows"
+popup = "~/.config/ricebar/scripts/windows-popup.sh"
+
+[[module.custom]]
+name = "network"
+exec = "~/.config/ricebar/scripts/network.sh"
+stream = true
+on-click = "nm-connection-editor"
+
+[[module.custom]]
+name = "volume"
+exec = "~/.config/ricebar/scripts/volume.sh"
+stream = true
+icons = ["", "", ""]
+format = "{icon} {value}"
+on-click = "pavucontrol"
+on-scroll-up = "pactl set-sink-volume @DEFAULT_SINK@ +5%"
+on-scroll-down = "pactl set-sink-volume @DEFAULT_SINK@ -5%"
+background = "#313244"
+
+[[module.custom]]
+name = "weather"
+exec = "LOCATION=Lublin ~/.config/ricebar/scripts/weather.sh"
+stream = true
+tooltip = "Fetching weather..."
+
+[[module.custom]]
+name = "kernel"
+exec = "uname -r"
+interval = 3600
+tooltip = "Running kernel"
+
+[[module.menu]]
+name = "power"
+label = "⏻"
+items = [
+    { label = "\U000F033E  Lock", exec = "hyprlock" },
+    { label = "\U000F04B2  Suspend", exec = "doas zzz" },
+    { label = "\U000F0709  Reboot", exec = "doas reboot" },
+    { label = "\U000F0425  Shutdown", exec = "doas poweroff" },
+]
