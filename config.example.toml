@@ -10,6 +10,7 @@ margin = [0, 0, 0, 0]     # top, right, bottom, left
 exclusive = true          # reserve the space so windows cannot cover the bar
 spacing = 8               # gap between modules
 padding = 8               # gap between modules and the bar's edge
+vertical-align = "center" # where modules sit in the bar's height: top | center | bottom
 
 # Font family as fontconfig names it. List them with `fc-list : family`, and
 # check one with `fc-match "<name>" family`. Leave it unset to use the system

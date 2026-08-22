@@ -436,6 +436,9 @@ pub fn view(bar: &Bar, id: window::Id) -> Element<'_, Message> {
     container(content)
         .width(Length::Fill)
         .height(Length::Fill)
+        // The row's own `align_y` only lines the modules up against each other.
+        // Without this the whole row sits at the top of the bar's height.
+        .align_y(bar.config.bar.vertical_align)
         .padding([0.0, bar.config.bar.padding])
         .style(move |_theme| container::Style {
             background: Some(style.background.color().into()),

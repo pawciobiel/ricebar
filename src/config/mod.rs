@@ -28,6 +28,8 @@ pub struct Bar {
     pub spacing: f32,
     /// Gap between the modules and the edge of the bar.
     pub padding: f32,
+    /// Where the modules sit within the bar's height.
+    pub vertical_align: VerticalAlign,
     /// Font family, as fontconfig knows it. Naming one that ships icon glyphs,
     /// such as a Nerd Font, is what makes module icons render reliably rather
     /// than by whatever the system happens to fall back to.
@@ -48,6 +50,7 @@ impl Default for Bar {
             exclusive: true,
             spacing: 8.0,
             padding: 8.0,
+            vertical_align: VerticalAlign::default(),
             font: None,
             font_size: 16.0,
             modules_left: vec![String::from("workspaces")],
@@ -64,6 +67,25 @@ pub enum Position {
     #[default]
     Top,
     Bottom,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum VerticalAlign {
+    Top,
+    #[default]
+    Center,
+    Bottom,
+}
+
+impl From<VerticalAlign> for iced::alignment::Vertical {
+    fn from(value: VerticalAlign) -> Self {
+        match value {
+            VerticalAlign::Top => Self::Top,
+            VerticalAlign::Center => Self::Center,
+            VerticalAlign::Bottom => Self::Bottom,
+        }
+    }
 }
 
 /// The bar's palette. Modules render against it rather than carrying their own
