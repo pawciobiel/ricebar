@@ -106,8 +106,9 @@ state a script cannot see.
 - [x] **cpu** — done, from `/proc/stat` deltas.
 - [x] **temperature** — done, preferring hwmon `k10temp`/`coretemp` over the
       ACPI zone. Outstanding: a critical threshold that recolours.
-- [x] **battery** — done, with the charging glyph when charging.
-      Outstanding: warning and critical states.
+- [x] **battery** — done. Shows a plug on mains and the level glyph on
+      battery, with the percentage either way. Outstanding: warning and
+      critical states.
 - [x] **backlight** — done, nine icons by brightness. Outstanding: scroll to
       change, which needs scroll events on modules.
 - [ ] **pulseaudio** — `U+F026` `U+F027` `U+F028` by volume, `U+F131` muted,

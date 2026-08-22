@@ -283,8 +283,13 @@ fn battery() -> Option<Reading> {
     let status = fs::read_to_string(battery.join("status")).unwrap_or_default();
     let status = status.trim().to_owned();
 
-    // Charging has its own glyph, since the level says nothing about direction.
-    let icon = matches!(status.as_str(), "Charging").then_some("\u{f5e7}");
+    // Whether the mains are connected is a better question than the battery's
+    // own status, which reads "Not charging" both when unplugged and when
+    // plugged in at a charge the firmware has decided is enough.
+    let icon = match mains() {
+        Some(true) => Some(PLUG),
+        _ => None,
+    };
 
     Some(Reading {
         level: capacity / 100.0,
@@ -296,6 +301,25 @@ fn battery() -> Option<Reading> {
         },
         icon,
     })
+}
+
+/// The plug glyph, shown instead of a battery level when on mains.
+const PLUG: &str = "\u{f1e6}";
+
+/// Whether a mains supply is connected, or None if the machine has none.
+fn mains() -> Option<bool> {
+    let supplies = fs::read_dir("/sys/class/power_supply").ok()?;
+
+    for supply in supplies.flatten() {
+        let kind = fs::read_to_string(supply.path().join("type")).unwrap_or_default();
+
+        if kind.trim() == "Mains" {
+            let online = read_number(&supply.path().join("online"))?;
+            return Some(online > 0.0);
+        }
+    }
+
+    None
 }
 
 fn backlight() -> Option<Reading> {
