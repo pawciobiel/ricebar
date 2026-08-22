@@ -162,6 +162,10 @@ popup = "~/.config/ricebar/scripts/windows-popup.sh"
 # [[module.custom]]
 # name = "stocks"
 # exec = "SYMBOLS='AAPL MSFT NVDA' FX='USD EUR' ~/.config/ricebar/scripts/stocks.sh"
+#
+# Indices default to SP500 DOW NASDAQ FTSE NIKKEI DAX WIG, written as
+# label=symbol; override with INDICES='DAX=^GDAXI WIG=WIG.WA' or turn them off
+# with INDICES=' ' (a space -- an empty value falls back to the default).
 # stream = true
 # scroll-width = 46
 # scroll-speed = 6

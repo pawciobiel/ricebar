@@ -26,6 +26,10 @@ SYMBOLS="${SYMBOLS:-AAPL MSFT NVDA}"
 # and it is the authoritative source for PLN -- finnhub's forex is paid.
 # Leave empty to skip.
 FX="${FX:-USD EUR}"
+# Market indices, from Yahoo's chart endpoint -- no key, and finnhub answers
+# "Market data subscription required" for these. Written as
+# label=symbol so the bar shows a readable name.
+INDICES="${INDICES:-SP500=^GSPC DOW=^DJI NASDAQ=^IXIC FTSE=^FTSE NIKKEI=^N225 DAX=^GDAXI WIG=WIG.WA}"
 EVERY="${EVERY:-300}"          # finnhub's free tier allows 60 calls/minute
 SEPARATOR="   \342\200\242   " # U+2022 bullet
 
@@ -68,6 +72,35 @@ print(f"{symbol} {price:g} {arrow}{abs(change):.1f}%")
 '
 }
 
+# One index, with the change since the previous close.
+index_quote() {
+    label=${1%%=*}
+    symbol=${1#*=}
+
+    curl -sf --max-time 10 -A 'Mozilla/5.0' \
+        "https://query1.finance.yahoo.com/v8/finance/chart/$symbol?range=2d&interval=1d" 2>/dev/null |
+        LABEL="$label" python3 -c '
+import json, os, sys
+
+try:
+    meta = json.load(sys.stdin)["chart"]["result"][0]["meta"]
+except Exception:
+    sys.exit(1)
+
+now = meta.get("regularMarketPrice")
+before = meta.get("chartPreviousClose") or meta.get("previousClose")
+if not now:
+    sys.exit(1)
+
+change = (now - before) / before * 100 if before else 0.0
+label = os.environ["LABEL"]
+arrow = "▲" if change >= 0 else "▼"
+
+# Indices run to five figures, so no decimals.
+print(f"{label} {now:,.0f} {arrow}{abs(change):.1f}%")
+'
+}
+
 # One currency against PLN, with the change since the previous fixing.
 fx_rate() {
     curl -sf --max-time 10 \
@@ -106,6 +139,11 @@ while :; do
 
     for symbol in $SYMBOLS; do
         entry=$(quote "$symbol" "$token") || continue
+        feed="${feed:+$feed$(printf "$SEPARATOR")}$entry"
+    done
+
+    for pair in $INDICES; do
+        entry=$(index_quote "$pair") || continue
         feed="${feed:+$feed$(printf "$SEPARATOR")}$entry"
     done
 
