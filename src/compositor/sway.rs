@@ -1,0 +1,209 @@
+//! sway IPC.
+//!
+//! sway speaks i3's protocol: a `i3-ipc` magic, a length and a type, then a
+//! JSON payload, all in native byte order. That is little enough to speak
+//! directly, and doing so keeps the bar on one async runtime -- `swayipc-async`
+//! is built on `async-io`, which would mean a second reactor beside tokio.
+
+use std::env;
+use std::io;
+use std::path::PathBuf;
+use std::time::Duration;
+
+use iced::futures::channel::mpsc;
+use iced::futures::{SinkExt, Stream};
+use iced::{Subscription, Task};
+use serde::Deserialize;
+use serde_json::Value;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::UnixStream;
+
+use super::{Compositor, Workspace, Workspaces};
+
+pub struct Sway;
+
+impl Compositor for Sway {
+    fn name(&self) -> &'static str {
+        "sway"
+    }
+
+    fn workspaces(&self) -> Subscription<Workspaces> {
+        Subscription::run(watch)
+    }
+
+    fn focus(&self, id: i32) -> Task<()> {
+        Task::future(async move {
+            if let Err(error) = command(&format!("workspace number {id}")).await {
+                eprintln!("ricebar: could not focus workspace {id}: {error}");
+            }
+        })
+    }
+}
+
+pub fn available() -> bool {
+    socket_path().is_some_and(|path| path.exists())
+}
+
+fn socket_path() -> Option<PathBuf> {
+    // I3SOCK covers i3 and the sway builds that set it instead.
+    env::var_os("SWAYSOCK")
+        .or_else(|| env::var_os("I3SOCK"))
+        .map(PathBuf::from)
+}
+
+const MAGIC: &[u8; 6] = b"i3-ipc";
+const RUN_COMMAND: u32 = 0;
+const GET_WORKSPACES: u32 = 1;
+const SUBSCRIBE: u32 = 2;
+const GET_TREE: u32 = 4;
+
+async fn connect() -> io::Result<UnixStream> {
+    let path = socket_path().ok_or_else(|| io::Error::other("SWAYSOCK is not set"))?;
+    UnixStream::connect(path).await
+}
+
+async fn send(stream: &mut UnixStream, kind: u32, payload: &str) -> io::Result<()> {
+    let mut message = Vec::with_capacity(MAGIC.len() + 8 + payload.len());
+
+    message.extend_from_slice(MAGIC);
+    // Native byte order, which is what i3 and sway both write.
+    message.extend_from_slice(&(payload.len() as u32).to_ne_bytes());
+    message.extend_from_slice(&kind.to_ne_bytes());
+    message.extend_from_slice(payload.as_bytes());
+
+    stream.write_all(&message).await
+}
+
+async fn receive(stream: &mut UnixStream) -> io::Result<(u32, Vec<u8>)> {
+    let mut header = [0u8; 14];
+    stream.read_exact(&mut header).await?;
+
+    if &header[..6] != MAGIC {
+        return Err(io::Error::other(
+            "reply did not start with the i3-ipc magic",
+        ));
+    }
+
+    let length = u32::from_ne_bytes([header[6], header[7], header[8], header[9]]) as usize;
+    let kind = u32::from_ne_bytes([header[10], header[11], header[12], header[13]]);
+
+    let mut payload = vec![0u8; length];
+    stream.read_exact(&mut payload).await?;
+
+    Ok((kind, payload))
+}
+
+async fn command(payload: &str) -> io::Result<()> {
+    let mut stream = connect().await?;
+    send(&mut stream, RUN_COMMAND, payload).await?;
+    receive(&mut stream).await?;
+    Ok(())
+}
+
+// Only the fields the bar uses; serde ignores the rest of sway's JSON.
+#[derive(Deserialize)]
+struct RawWorkspace {
+    num: i32,
+    name: String,
+    output: String,
+    visible: bool,
+    focused: bool,
+}
+
+async fn snapshot() -> io::Result<Workspaces> {
+    let mut stream = connect().await?;
+
+    send(&mut stream, GET_WORKSPACES, "").await?;
+    let (_, payload) = receive(&mut stream).await?;
+    let mut workspaces: Vec<RawWorkspace> =
+        serde_json::from_slice(&payload).map_err(io::Error::other)?;
+
+    // `get_workspaces` does not carry a window count, so it comes from the tree.
+    send(&mut stream, GET_TREE, "").await?;
+    let (_, payload) = receive(&mut stream).await?;
+    let tree: Value = serde_json::from_slice(&payload).map_err(io::Error::other)?;
+
+    // sway lists workspaces per output; sort so the pills keep a stable order.
+    workspaces.sort_by_key(|workspace| workspace.num);
+
+    Ok(workspaces
+        .into_iter()
+        .map(|workspace| Workspace {
+            windows: count_windows(&tree, &workspace.name),
+            id: workspace.num,
+            name: workspace.name,
+            monitor: workspace.output,
+            visible: workspace.visible,
+            focused: workspace.focused,
+        })
+        .collect())
+}
+
+/// Count the views on one workspace by walking the tree to its node.
+fn count_windows(node: &Value, workspace: &str) -> u16 {
+    if node.get("type").and_then(Value::as_str) == Some("workspace")
+        && node.get("name").and_then(Value::as_str) == Some(workspace)
+    {
+        return count_views(node);
+    }
+
+    children(node)
+        .map(|child| count_windows(child, workspace))
+        .sum()
+}
+
+/// A view is a node with nothing inside it; containers only hold other nodes.
+fn count_views(node: &Value) -> u16 {
+    let mut leaves = children(node).peekable();
+
+    if leaves.peek().is_none() {
+        let kind = node.get("type").and_then(Value::as_str);
+        return u16::from(matches!(kind, Some("con" | "floating_con")));
+    }
+
+    leaves.map(count_views).sum()
+}
+
+fn children(node: &Value) -> impl Iterator<Item = &Value> {
+    ["nodes", "floating_nodes"]
+        .into_iter()
+        .filter_map(|key| node.get(key))
+        .filter_map(Value::as_array)
+        .flatten()
+}
+
+fn watch() -> impl Stream<Item = Workspaces> {
+    iced::stream::channel(16, async |mut output: mpsc::Sender<Workspaces>| {
+        loop {
+            if let Err(error) = follow(&mut output).await {
+                eprintln!("ricebar: sway ipc: {error}");
+            }
+            // The socket goes when sway exits. Keep retrying so the bar
+            // recovers rather than silently freezing.
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    })
+}
+
+async fn follow(output: &mut mpsc::Sender<Workspaces>) -> io::Result<()> {
+    // A subscribed connection only carries events, so requests use their own.
+    let mut events = connect().await?;
+    send(&mut events, SUBSCRIBE, r#"["workspace","window"]"#).await?;
+
+    // Subscribe before the first snapshot, so no change slips through the gap.
+    receive(&mut events).await?;
+
+    if output.send(snapshot().await?).await.is_err() {
+        return Ok(());
+    }
+
+    loop {
+        receive(&mut events).await?;
+
+        // Re-query rather than patch state from the event payload: one round
+        // trip is cheap, and the bar can never drift out of sync.
+        if output.send(snapshot().await?).await.is_err() {
+            return Ok(());
+        }
+    }
+}

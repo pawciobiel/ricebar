@@ -16,7 +16,7 @@ config, a Rust module API, and a script escape hatch for everything else.
   on vanilla iced 0.14 — no forks.
 - **The Elm loop.** A `Message` arrives, `update` mutates state, `view` redraws.
 - **Compositor-agnostic.** A `Compositor` trait keeps the bar core free of
-  compositor specifics. Hyprland first; sway and niri to follow.
+  compositor specifics. Hyprland and sway are supported; niri to follow.
 - **Modules.** In-tree modules implement a `Module` trait. Anything else can be a
   `[[module.custom]]` running a script — no Rust required.
 

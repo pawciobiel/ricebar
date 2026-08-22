@@ -13,7 +13,7 @@ pub struct Workspaces {
 
 impl Workspaces {
     pub fn new(config: &config::Workspaces) -> Self {
-        let compositor = compositor::detect();
+        let compositor = compositor::detect(config.compositor);
 
         match &compositor {
             Some(compositor) => eprintln!("ricebar: compositor: {}", compositor.name()),

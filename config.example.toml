@@ -63,6 +63,11 @@ on-click-day = "notify-send ricebar {}"
 
 [module.workspaces]
 show-empty = true
+# auto | hyprland | sway | none. `auto` follows the environment, which is
+# ambiguous in a nested session: a sway session started inside Hyprland
+# inherits HYPRLAND_INSTANCE_SIGNATURE, so both look present. Name one to
+# settle it.
+compositor = "auto"
 
 # Custom modules run a shell command and show its output. This is how to add
 # a module without writing any Rust.

@@ -239,11 +239,27 @@ impl Default for Clock {
 pub struct Workspaces {
     /// Show workspaces that hold no windows.
     pub show_empty: bool,
+    /// Which compositor to talk to. `auto` follows the environment, which is
+    /// ambiguous inside a nested session — see `compositor::detect`.
+    pub compositor: Backend,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Backend {
+    #[default]
+    Auto,
+    Hyprland,
+    Sway,
+    None,
 }
 
 impl Default for Workspaces {
     fn default() -> Self {
-        Self { show_empty: true }
+        Self {
+            show_empty: true,
+            compositor: Backend::default(),
+        }
     }
 }
 
