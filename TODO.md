@@ -182,6 +182,57 @@ state a script cannot see.
       `view(bar, id)` then filters by monitor. Also means handling
       `monitoradded`/`monitorremoved` ourselves.
 
+## Untrusted input
+
+Scripts, environment variables and file contents all reach the bar without
+being checked for size or shape. None of it is a privilege boundary — the
+config is already trusted to run commands — but a script that misbehaves, or
+a filename that is not what anyone expected, should not be able to wedge the
+bar or hand it an absurd surface to draw.
+
+- [ ] **Bound the popup surface.** `popup_settings` clamps width to 48..720
+      but only does `height.max(1.0)`, so height has no upper limit. A tooltip
+      is sized from its number of lines, which means a script printing a few
+      thousand lines asks the compositor for a surface taller than the screen.
+      Clamp height the way width already is, and clamp the line count first.
+- [ ] **Bound what a script may print.** `execute` reads all of stdout into
+      memory with no limit, and `follow` accepts any line length. A runaway
+      command can grow the bar's memory without bound. Take a fixed number of
+      bytes per line and per run, and say the output was truncated.
+- [ ] **Bound the number of popup entries.** A `popup` script returning ten
+      thousand items becomes ten thousand buttons on one surface. Cap the list
+      and note how many were dropped.
+- [ ] **Strip control characters from anything drawn.** Script output, module
+      names and config strings all reach `text()` unchecked. Newlines in a bar
+      label break the row's layout, and ANSI escapes and other C0 characters
+      have no business being rendered. Keep newlines only where they are
+      meaningful, which is tooltips.
+- [ ] **Sanity-check config and environment strings.** The font family is
+      leaked deliberately, so a very long one leaks that much for the life of
+      the process. Paths from `XDG_CONFIG_HOME`, `SWAYSOCK`, `NIRI_SOCKET` and
+      `HYPRLAND_INSTANCE_SIGNATURE` are joined into paths without a length or
+      content check.
+- [ ] **Decide what a module's name may contain.** It is used as a key in
+      config and shown in the bar; today it can be anything, including an
+      empty string or something that looks like another module.
+
+## Configuration, continued
+
+- [ ] **Several bars in one config.** Today a bar is one process anchored to
+      one edge, and a second edge means running ricebar twice with `--config`.
+      A `[[bar]]` array would let one process own several, each with its own
+      edge, height and rows. The runtime can already hold more than one
+      surface — that is how `StartMode::AllScreens` works, and
+      `Message::NewLayerShell` mints them on demand — so this is a question of
+      config shape and of `view` knowing which bar a `window::Id` belongs to,
+      the same lookup per-monitor bars need.
+- [ ] **Write a default config on first run.** Starting with no config leaves
+      no trace of what could be configured; the bar comes up on defaults and
+      the user has to find the example. Create the directory and write a
+      commented default the first time, then say where it went. Never
+      overwrite an existing one, and keep working if the directory cannot be
+      created.
+
 ## Packaging
 
 - [ ] **Publish to crates.io.** The name is free. Needs a real README badge set,
