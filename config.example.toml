@@ -148,6 +148,24 @@ label = "\uf2d2"
 tooltip = "Open windows"
 popup = "~/.config/ricebar/scripts/windows-popup.sh"
 
+# Stock quotes from finnhub.io. Needs a free API key, kept in a file of its
+# own rather than here -- see the header of dev/scripts/stocks.sh:
+#
+#   printf '%s\n' 'YOUR_KEY' > ~/.config/ricebar/finnhub.token
+#   chmod 600 ~/.config/ricebar/finnhub.token
+#
+# Then add "stocks" to a row's modules. Until the key exists it says so
+# rather than failing quietly.
+#
+# FX rates come from the Polish central bank instead, which needs no key --
+# finnhub's forex endpoint is paid. Set FX='' to leave them out.
+# [[module.custom]]
+# name = "stocks"
+# exec = "SYMBOLS='AAPL MSFT NVDA' FX='USD EUR' ~/.config/ricebar/scripts/stocks.sh"
+# stream = true
+# scroll-width = 46
+# scroll-speed = 6
+
 # A ticker. Content longer than `scroll-width` characters is scrolled past a
 # window of that width, wrapping through a separator -- the second row is where
 # something too wide for a status bar belongs. Character-stepped rather than
