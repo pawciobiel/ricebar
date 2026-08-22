@@ -11,6 +11,8 @@
 #   stream = true
 #
 # Set LOCATION to a city, or leave it empty to let wttr.in guess from the IP.
+# Qualify it with a country -- "Lublin,Poland", not "Lublin" -- since plenty of
+# names are shared, and coordinates such as "51.25,22.57" are exact.
 
 LOCATION="${LOCATION:-}"
 EVERY="${EVERY:-900}"   # seconds between fetches; be kind to a free service
