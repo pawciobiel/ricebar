@@ -11,14 +11,14 @@ exclusive = true          # reserve the space so windows cannot cover the bar
 spacing = 8               # gap between modules
 padding = 8               # gap between modules and the bar's edge
 
-# Font family as fontconfig names it -- list them with `fc-list : family`, and
-# check one with `fc-match "Hack Nerd Font" family`. Leave it unset to use the
-# system default. Name a Nerd Font if any module shows icon glyphs, otherwise
-# they render only if the system happens to fall back to one.
+# Font family as fontconfig names it. List them with `fc-list : family`, and
+# check one with `fc-match "<name>" family`. Leave it unset to use the system
+# default. Name a Nerd Font if any module shows icon glyphs, otherwise they
+# render only if the system happens to fall back to one.
 #
 # A name fontconfig does not know is substituted silently, so if text turns up
 # in the wrong face, check the name with fc-match before suspecting ricebar.
-font = "Hack Nerd Font"
+font = "JetBrainsMono Nerd Font"
 font-size = 16
 
 modules-left = ["workspaces"]

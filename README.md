@@ -33,7 +33,7 @@ A module runs only if it is named in one of the `modules-*` lists, so removing
 position = "top"          # top | bottom
 height = 32
 margin = [0, 0, 0, 0]     # top, right, bottom, left
-font = "Hack Nerd Font"   # omit for the system default
+font = "JetBrainsMono Nerd Font"   # omit for the system default
 font-size = 16
 modules-left = ["workspaces"]
 modules-center = ["clock"]
