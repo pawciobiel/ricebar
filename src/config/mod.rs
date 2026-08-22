@@ -251,6 +251,7 @@ pub enum Backend {
     Auto,
     Hyprland,
     Sway,
+    Niri,
     None,
 }
 

@@ -63,7 +63,7 @@ on-click-day = "notify-send ricebar {}"
 
 [module.workspaces]
 show-empty = true
-# auto | hyprland | sway | none. `auto` follows the environment, which is
+# auto | hyprland | sway | niri | none. `auto` follows the environment, which is
 # ambiguous in a nested session: a sway session started inside Hyprland
 # inherits HYPRLAND_INSTANCE_SIGNATURE, so both look present. Name one to
 # settle it.

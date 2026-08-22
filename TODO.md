@@ -29,11 +29,29 @@ work does not have to be rediscovered.
       is genuinely ambiguous. `compositor` in `[module.workspaces]` settles it;
       `auto` tries sway first, that nesting direction being the common one.
 
-- [ ] **niri backend.** `niri-ipc` 26.4.0. Its event stream is the odd one out:
-      it sends complete state up front and then deltas, with
-      `EventStreamStatePart::apply` maintaining the state for you. Our
-      `Workspaces` type is already a whole-snapshot model, so it should map
-      cleanly. Not installed here — needs installing to test.
+- [x] **niri backend.** Done, in `src/compositor/niri.rs`. A line of JSON in,
+      a line of JSON out. Unlike the other two it keeps state rather than
+      re-querying: niri sends the whole state when the stream opens and deltas
+      after, which its documentation calls the way to avoid drifting out of
+      sync. Window counts come from `WindowsChanged` /
+      `WindowOpenedOrChanged` / `WindowClosed`, since workspaces do not carry
+      one. Focus is by workspace `id`, not `idx` — an index only identifies a
+      workspace within one output.
+
+      Nests the same way sway does:
+
+      ```sh
+      niri --config dev/niri-nested.kdl &
+      SOCK=$(ls /run/user/$UID/niri.wayland-*.sock | head -1)
+      WAYLAND_DISPLAY=wayland-2 NIRI_SOCKET=$SOCK ./target/debug/ricebar
+      ```
+
+      niri keeps an empty workspace at the end of each output, which shows up
+      dimmed. Being a scrolling compositor changes nothing for the bar: layer
+      surfaces are anchored to the output, and only windows scroll. Its
+      Overview does matter — background and bottom layers zoom out with the
+      workspaces while top and overlay stay above, so a bar wants `Layer::Top`,
+      which is what ricebar already uses.
 
 ## Modules
 

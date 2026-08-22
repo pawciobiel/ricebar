@@ -1,0 +1,40 @@
+// A minimal niri session for developing ricebar's niri backend, run nested
+// inside whatever compositor you are already using. See TODO.md.
+//
+//   niri --config dev/niri-nested.kdl
+
+input {
+    keyboard {
+        xkb {
+        }
+    }
+}
+
+layout {
+    gaps 8
+
+    // A picture would be better, but niri has no wallpaper of its own; run
+    // swaybg against its socket if the flat background makes the bar look
+    // like it fills the window.
+    focus-ring {
+        width 2
+        active-color "#89b4fa"
+    }
+}
+
+// The nested window.
+output "winit" {
+    mode "1280x800"
+}
+
+binds {
+    Mod+Return { spawn "alacritty"; }
+    Mod+Q { close-window; }
+    Mod+Shift+E { quit skip-confirmation=true; }
+
+    // Several workspaces, so the workspaces module has something to show.
+    Mod+1 { focus-workspace 1; }
+    Mod+2 { focus-workspace 2; }
+    Mod+3 { focus-workspace 3; }
+    Mod+4 { focus-workspace 4; }
+}

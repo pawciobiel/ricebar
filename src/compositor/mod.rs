@@ -4,6 +4,7 @@
 //! means adding a module here and a branch in [`detect`].
 
 pub mod hyprland;
+pub mod niri;
 pub mod sway;
 
 use iced::{Subscription, Task};
@@ -48,12 +49,14 @@ pub trait Compositor {
 /// compositor. sway is tried first because that nesting direction is the
 /// common one, and `compositor` in config settles it either way.
 pub fn detect(preference: config::Backend) -> Option<Box<dyn Compositor>> {
+    let niri = || niri::available().then(|| Box::new(niri::Niri) as Box<dyn Compositor>);
     let sway = || sway::available().then(|| Box::new(sway::Sway) as Box<dyn Compositor>);
     let hyprland =
         || hyprland::available().then(|| Box::new(hyprland::Hyprland) as Box<dyn Compositor>);
 
     match preference {
-        config::Backend::Auto => sway().or_else(hyprland),
+        config::Backend::Auto => niri().or_else(sway).or_else(hyprland),
+        config::Backend::Niri => niri(),
         config::Backend::Sway => sway(),
         config::Backend::Hyprland => hyprland(),
         config::Backend::None => None,
