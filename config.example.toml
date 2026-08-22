@@ -23,7 +23,7 @@ font-size = 16
 
 modules-left = ["workspaces"]
 modules-center = ["clock"]
-modules-right = ["memory"]
+modules-right = ["memory", "power"]
 
 [bar.style]
 # #rgb, #rgba, #rrggbb and #rrggbbaa all work.
@@ -58,6 +58,23 @@ show-empty = true
 name = "memory"
 exec = '''free -m | awk '/^Mem:/ {printf "{\"text\":\"\357\203\211\",\"tooltip\":\"%.0f%% - %d MiB of %d MiB used\"}", $3/$2*100, $3, $2}' '''
 interval = 5
+
+# A menu module shows a label and opens a list of commands when clicked.
+# Clicking an entry runs it and closes the menu; clicking the label again just
+# closes it. Labels use TOML's \U escapes so the file stays plain ASCII --
+# ⏻ is the power symbol, and the entry icons are Nerd Font glyphs.
+#
+# These entries really do power the machine off. Change them before use.
+[[module.menu]]
+name = "power"
+label = "⏻"
+tooltip = "Power"
+items = [
+    { label = "\U000F033E  Lock", exec = "hyprlock" },
+    { label = "\U000F04B2  Suspend", exec = "doas zzz" },
+    { label = "\U000F0709  Reboot", exec = "doas reboot" },
+    { label = "\U000F0425  Shutdown", exec = "doas poweroff" },
+]
 
 # The simplest possible form: plain text, with a fixed tooltip.
 # [[module.custom]]

@@ -50,7 +50,8 @@ impl Module for Workspaces {
                 Some(compositor) => compositor.focus(id).discard(),
                 None => Task::none(),
             },
-            Event::Tick | Event::Content(_) => Task::none(),
+            // The shared enum carries events for every kind of module.
+            _ => Task::none(),
         }
     }
 

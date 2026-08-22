@@ -31,6 +31,47 @@ work does not have to be rediscovered.
 - [ ] **`format` templating** so a module's output can be wrapped without the
       script having to emit the final string, e.g. `format = "  {}"`.
 
+## waybar parity
+
+One item per module in the reference waybar config, with the icons it uses.
+Codepoints rather than glyphs, since these live in Unicode private-use planes
+and do not survive copy-paste reliably. All are Nerd Font glyphs unless noted.
+
+Anything here can be approximated today with `[[module.custom]]` plus a script;
+a built-in earns its place by removing the shell round trip, or by needing
+state a script cannot see.
+
+- [ ] **cpu** — `U+F2DB`. Icon in the bar, usage percent in the tooltip.
+- [ ] **temperature** — `U+F76B` `U+F2C9` `U+F769` chosen by level, with a
+      critical threshold that recolours. Reads sysfs/hwmon.
+- [ ] **battery** — `U+F244`…`U+F240` by charge, `U+F1E6` plugged,
+      `U+F5E7` charging. Needs warning and critical states.
+- [ ] **backlight** — nine icons `U+E38D` `U+E39B` `U+E3C8` `U+E3CA` `U+E3CD`
+      `U+E3CE` `U+E3CF` `U+E3D1` `U+E3D3` by brightness. Scroll to change.
+- [ ] **pulseaudio** — `U+F026` `U+F027` `U+F028` by volume, `U+F131` muted,
+      plus per-device icons (headphone `U+F025`, headset `U+F590`,
+      phone `U+F095`, portable `U+F10B`, car `U+F1B9`). Scroll to change,
+      click opens `pavucontrol`.
+- [ ] **network** — `U+F1EB` wifi with essid and signal, `U+F796` ethernet,
+      `U+26A0` disconnected. Tooltip shows interface, address and gateway.
+- [ ] **power-profiles-daemon** — `U+F0E7` performance, `U+F24E` balanced,
+      `U+F06C` power-saver. D-Bus.
+- [ ] **idle_inhibitor** — `U+F06E` active, `U+F070` inactive. Toggle on click.
+- [ ] **keyboard-state** — `U+F023` locked, `U+F09C` unlocked, for numlock and
+      capslock.
+- [ ] **tray** — StatusNotifierItem host. The largest item here by far: it is a
+      D-Bus service plus icon rendering, not a readout.
+- [ ] **window title** — active window title, from the `Compositor` trait.
+- [ ] **submap** — Hyprland submap name, already script-shaped
+      (`hyprland-submap.sh`); needs `activesubmap>>` from the event socket.
+- [ ] **media** — `U+F1BC` player-specific icons, scrolling title, playerctl or
+      MPRIS over D-Bus.
+- [ ] **clock calendar tooltip** — waybar renders a month calendar in the
+      tooltip and scrolls through months. Ours shows a formatted date only.
+- [ ] **separator** (`" | "`) and **static launcher icons** such as
+      `U+2328` key bindings and `U+1F5A5` monitor toggle — both are a label
+      plus `on-click`, so they fall out of click actions for custom modules.
+
 ## Configuration
 
 - [ ] **Hot reload.** Watch the config file and rebuild the modules in place.

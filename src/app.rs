@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use iced::widget::{container, mouse_area, row, space, text};
+use iced::widget::{button, column, container, mouse_area, row, space, text};
 use iced::{Alignment, Border, Color, Element, Length, Subscription, Task, window};
 use iced_layershell::reexport::{
     Anchor, KeyboardInteractivity, Layer, NewLayerShellSettings, OutputOption,
@@ -32,8 +32,15 @@ struct Popup {
     id: window::Id,
     /// The module it belongs to.
     module: usize,
-    text: String,
+    kind: PopupKind,
     opened: Instant,
+}
+
+enum PopupKind {
+    /// Hover text. Takes no pointer input, so the bar keeps receiving it.
+    Tooltip(String),
+    /// Clickable entries, read back from the module that owns them.
+    Menu,
 }
 
 /// A new surface briefly disturbs the pointer state of the one below it, which
@@ -120,6 +127,21 @@ pub fn subscription(bar: &Bar) -> Subscription<Message> {
 
 pub fn update(bar: &mut Bar, message: Message) -> Task<Message> {
     match message {
+        // Opening and closing surfaces is the bar's job, so these two are
+        // handled here rather than passed down to the module.
+        Message::Module(index, Event::ToggleMenu) => toggle_menu(bar, index),
+        Message::Module(index, Event::Activate(entry)) => {
+            let closed = close_popup(bar);
+
+            let ran = match bar.modules.get_mut(index) {
+                Some(module) => module
+                    .update(Event::Activate(entry))
+                    .map(move |event| Message::Module(index, event)),
+                None => Task::none(),
+            };
+
+            Task::batch([closed, ran])
+        }
         Message::Module(index, event) => match bar.modules.get_mut(index) {
             Some(module) => module
                 .update(event)
@@ -131,6 +153,15 @@ pub fn update(bar: &mut Bar, message: Message) -> Task<Message> {
             open_popup(bar)
         }
         Message::Leave(index) => {
+            // A menu waits to be clicked, so it must survive the pointer
+            // travelling from the module down to it.
+            if matches!(
+                bar.popup.as_ref().map(|popup| &popup.kind),
+                Some(PopupKind::Menu)
+            ) {
+                return Task::none();
+            }
+
             // A popup's own appearance makes iced report the pointer as having
             // left the bar. Treat a leave that arrives this soon as that echo,
             // and keep `hovered` intact so a later, real leave still closes it.
@@ -175,12 +206,49 @@ fn open_popup(bar: &mut Bar) -> Task<Message> {
 
     let closed = close_popup(bar);
     let id = window::Id::unique();
-    let settings = tooltip_settings(bar, index, &tooltip);
+    let settings = popup_settings(bar, index, tooltip.chars().count(), 1, true);
 
     bar.popup = Some(Popup {
         id,
         module: index,
-        text: tooltip,
+        kind: PopupKind::Tooltip(tooltip),
+        opened: Instant::now(),
+    });
+
+    Task::batch([closed, Task::done(Message::NewLayerShell { settings, id })])
+}
+
+/// Show or hide the menu belonging to a module.
+fn toggle_menu(bar: &mut Bar, index: usize) -> Task<Message> {
+    // A second click on the same module closes what the first one opened.
+    if bar
+        .popup
+        .as_ref()
+        .is_some_and(|popup| popup.module == index && matches!(popup.kind, PopupKind::Menu))
+    {
+        return close_popup(bar);
+    }
+
+    let Some(items) = bar.modules.get(index).and_then(|module| module.menu()) else {
+        return Task::none();
+    };
+
+    let widest = items
+        .iter()
+        .map(|item| item.label.chars().count())
+        .max()
+        .unwrap_or(0);
+    let rows = items.len();
+
+    let closed = close_popup(bar);
+    let id = window::Id::unique();
+    // A menu has to be clickable, so unlike a tooltip it accepts pointer input.
+    let settings = popup_settings(bar, index, widest, rows, false);
+
+    bar.popup = Some(Popup {
+        id,
+        module: index,
+        kind: PopupKind::Menu,
         opened: Instant::now(),
     });
 
@@ -197,15 +265,25 @@ fn close_popup(bar: &mut Bar) -> Task<Message> {
     }
 }
 
-fn tooltip_settings(bar: &Bar, index: usize, tooltip: &str) -> NewLayerShellSettings {
-    // A tooltip is its own layer surface rather than an xdg popup. The runtime
-    // creates popups with a grab, which is right for a menu but takes every
-    // pointer event away from the bar underneath for as long as it is open.
+/// Build the surface for a tooltip or a menu, sized for `columns` characters
+/// across and `rows` lines down.
+///
+/// Both are layer surfaces rather than xdg popups. The runtime builds popups
+/// with a grab, which suits a menu but takes every pointer event away from the
+/// bar underneath for as long as one is open, leaving no way to dismiss it.
+fn popup_settings(
+    bar: &Bar,
+    index: usize,
+    columns: usize,
+    rows: usize,
+    transparent_to_events: bool,
+) -> NewLayerShellSettings {
     let font_size = bar.config.bar.font_size;
-    let width = (tooltip.chars().count() as f32)
+    let width = (columns as f32)
         .mul_add(font_size * TOOLTIP_GLYPH_RATIO, 2.0 * TOOLTIP_PADDING)
         .clamp(48.0, 720.0) as u32;
-    let height = font_size.mul_add(TOOLTIP_LINE_RATIO, 2.0 * TOOLTIP_PADDING) as u32;
+    let height =
+        (rows as f32).mul_add(font_size * TOOLTIP_LINE_RATIO, 2.0 * TOOLTIP_PADDING) as u32;
 
     // Anchor under the module's own region. A layer surface anchored to
     // neither side is centred on that axis, and one anchored to a side cannot
@@ -242,10 +320,10 @@ fn tooltip_settings(bar: &Bar, index: usize, tooltip: &str) -> NewLayerShellSett
         margin: Some(margin),
         keyboard_interactivity: KeyboardInteractivity::None,
         output_option: OutputOption::Active,
-        // Without this the tooltip would take pointer events itself, and the
-        // bar would never learn that the pointer had moved away.
-        events_transparent: true,
-        namespace: Some(String::from("ricebar-tooltip")),
+        // A tooltip must not take pointer events, or the bar would never learn
+        // that the pointer had moved away. A menu exists to be clicked.
+        events_transparent: transparent_to_events,
+        namespace: Some(String::from("ricebar-popup")),
     }
 }
 
@@ -259,7 +337,12 @@ const TOOLTIP_PADDING: f32 = 10.0;
 fn popup_view<'a>(bar: &'a Bar, popup: &'a Popup) -> Element<'a, Message> {
     let style = bar.config.bar.style;
 
-    container(text(popup.text.as_str()).wrapping(text::Wrapping::None))
+    let body: Element<'a, Message> = match &popup.kind {
+        PopupKind::Tooltip(tooltip) => text(tooltip.as_str()).wrapping(text::Wrapping::None).into(),
+        PopupKind::Menu => menu_view(bar, popup.module, style),
+    };
+
+    container(body)
         .width(Length::Fill)
         .height(Length::Fill)
         .center_y(Length::Fill)
@@ -275,6 +358,39 @@ fn popup_view<'a>(bar: &'a Bar, popup: &'a Popup) -> Element<'a, Message> {
             ..Default::default()
         })
         .into()
+}
+
+fn menu_view(bar: &Bar, index: usize, style: config::Style) -> Element<'_, Message> {
+    let Some(items) = bar.modules.get(index).and_then(|module| module.menu()) else {
+        return space::horizontal().into();
+    };
+
+    let entries = items.iter().enumerate().map(|(entry, item)| {
+        button(text(item.label.as_str()).wrapping(text::Wrapping::None))
+            .width(Length::Fill)
+            .padding([2, 6])
+            .on_press(Message::Module(index, Event::Activate(entry)))
+            .style(move |_theme, status| button::Style {
+                background: match status {
+                    button::Status::Hovered | button::Status::Pressed => {
+                        Some(style.accent.color().into())
+                    }
+                    _ => None,
+                },
+                text_color: match status {
+                    button::Status::Hovered | button::Status::Pressed => style.background.color(),
+                    _ => style.foreground.color(),
+                },
+                border: iced::Border {
+                    radius: 4.into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .into()
+    });
+
+    column(entries).spacing(2).into()
 }
 
 pub fn view(bar: &Bar, id: window::Id) -> Element<'_, Message> {

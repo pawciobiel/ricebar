@@ -108,6 +108,30 @@ pub struct Modules {
     pub workspaces: Workspaces,
     /// User-defined command modules, each enabled by its own `name`.
     pub custom: Vec<Custom>,
+    /// User-defined menu modules, each enabled by its own `name`.
+    pub menu: Vec<Menu>,
+}
+
+/// A module that shows a label and opens a menu of commands when clicked.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct Menu {
+    /// The name used in the `modules-*` lists.
+    pub name: String,
+    /// What the bar shows, usually a single icon glyph.
+    pub label: String,
+    pub items: Vec<MenuItem>,
+    /// Shown on hover.
+    #[serde(default)]
+    pub tooltip: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct MenuItem {
+    pub label: String,
+    /// Passed to `sh -c` when the entry is chosen.
+    pub exec: String,
 }
 
 /// A module that runs a shell command and shows its output.

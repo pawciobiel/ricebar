@@ -5,6 +5,7 @@
 
 pub mod clock;
 pub mod custom;
+pub mod menu;
 pub mod workspaces;
 
 use iced::{Element, Subscription, Task};
@@ -28,6 +29,10 @@ pub enum Event {
     FocusWorkspace(i32),
     /// A module produced new content to display.
     Content(Content),
+    /// The user clicked a module that owns a menu.
+    ToggleMenu,
+    /// The user chose the menu entry at this index.
+    Activate(usize),
 }
 
 /// What a module shows: a label, and optionally something longer to reveal on
@@ -68,6 +73,12 @@ pub trait Module {
     fn tooltip(&self) -> Option<String> {
         None
     }
+
+    /// Entries to show when this module is clicked. The surface holding them is
+    /// the bar's business, not the module's, so this only describes them.
+    fn menu(&self) -> Option<&[config::MenuItem]> {
+        None
+    }
 }
 
 /// Turn a name from config into a module.
@@ -75,11 +86,18 @@ pub fn build(name: &str, config: &config::Modules) -> Option<Box<dyn Module>> {
     match name {
         "clock" => Some(Box::new(clock::Clock::new(&config.clock))),
         "workspaces" => Some(Box::new(workspaces::Workspaces::new(&config.workspaces))),
-        // Anything else may be a user-defined command module.
+        // Anything else is user-defined, by name.
         _ => config
             .custom
             .iter()
             .find(|custom| custom.name == name)
-            .map(|custom| Box::new(custom::Custom::new(custom)) as Box<dyn Module>),
+            .map(|custom| Box::new(custom::Custom::new(custom)) as Box<dyn Module>)
+            .or_else(|| {
+                config
+                    .menu
+                    .iter()
+                    .find(|menu| menu.name == name)
+                    .map(|menu| Box::new(menu::Menu::new(menu)) as Box<dyn Module>)
+            }),
     }
 }
