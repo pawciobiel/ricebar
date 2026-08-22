@@ -68,7 +68,8 @@ interval = 5
 [[module.menu]]
 name = "power"
 label = "⏻"
-tooltip = "Power"
+# `tooltip` is optional and off unless set. A menu says what it is when opened,
+# so hover text mostly gets in the way.
 items = [
     { label = "\U000F033E  Lock", exec = "hyprlock" },
     { label = "\U000F04B2  Suspend", exec = "doas zzz" },
