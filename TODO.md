@@ -8,8 +8,30 @@ work does not have to be rediscovered.
 - [ ] **sway backend.** `swayipc` 4.0.0 is stable and mature (4.7M downloads),
       unlike Hyprland's wrapper, so use the crate rather than hand-rolling.
       Implement `Compositor` in `src/compositor/sway.rs` and add a branch to
-      `compositor::detect` — the bar core needs no changes. sway is already
-      installed here, so it can be tested in a nested session.
+      `compositor::detect` — the bar core needs no changes.
+
+      Develop it **nested**, without leaving your own session (verified on
+      Hyprland 0.54.3 with sway 1.12):
+
+      ```sh
+      WLR_BACKENDS=wayland sway --config dev/sway-nested.conf &
+      SOCK=$(ls /run/user/$UID/sway-ipc.$UID.*.sock | head -1)
+      env -u HYPRLAND_INSTANCE_SIGNATURE \
+          WAYLAND_DISPLAY=wayland-2 SWAYSOCK=$SOCK \
+          ./target/debug/ricebar
+      ```
+
+      sway opens as an ordinary window with its own `WAYLAND_DISPLAY`, and
+      ricebar runs inside it as a layer-shell client. `$mod+Shift+e` quits it.
+      Two things to know: the `Failed to start Xwayland` error is harmless, and
+      the host's environment leaks in, which is why
+      `HYPRLAND_INSTANCE_SIGNATURE` has to be unset.
+
+      That leak is worth fixing as part of this work: with both
+      `HYPRLAND_INSTANCE_SIGNATURE` and `SWAYSOCK` set, `detect()` picks
+      Hyprland and talks to the *host* compositor from inside sway. Detection
+      should confirm the socket it chose actually answers, rather than trusting
+      an environment variable to mean the compositor is the current one.
 - [ ] **niri backend.** `niri-ipc` 26.4.0. Its event stream is the odd one out:
       it sends complete state up front and then deltas, with
       `EventStreamStatePart::apply` maintaining the state for you. Our
