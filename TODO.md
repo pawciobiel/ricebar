@@ -151,6 +151,11 @@ state a script cannot see.
 
 ## Rendering
 
+- [x] **More than one row.** `[[bar.row]]` stacks lines, each with its own
+      regions and height; the reserved space grows with the total. A second row
+      is where anything too wide for a status bar goes — a stock ticker, now
+      playing, a headline feed.
+
 - [ ] **Measure tooltip text properly.** The surface is sized from a glyph-count
       estimate scaled by font size, because text cannot be measured outside a
       renderer and `window::resize_events()` never fires for layer surfaces.

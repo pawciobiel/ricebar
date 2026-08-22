@@ -22,9 +22,24 @@ vertical-align = "center" # where modules sit in the bar's height: top | center 
 font = "JetBrainsMono Nerd Font"
 font-size = 16
 
+# One row is just the three modules-* lists:
+#
+#   modules-left = ["workspaces"]
+#   modules-center = ["clock"]
+#   modules-right = ["battery"]
+#
+# Use [[bar.row]] instead and the bar grows a line per entry, each with its own
+# left, centre and right, and its own height. The reserved space grows with it,
+# so windows still sit below the whole thing.
+[[bar.row]]
 modules-left = ["launcher", "workspaces"]
 modules-center = ["clock"]
 modules-right = ["volume", "cpu", "memory", "temperature", "backlight", "battery", "power"]
+
+[[bar.row]]
+height = 24
+modules-left = ["weather"]
+modules-right = ["kernel"]
 
 [bar.style]
 # #rgb, #rgba, #rrggbb and #rrggbbaa all work.
@@ -105,6 +120,25 @@ format = "{icon} {value}"
 on-click = "pavucontrol"
 background = "#313244"
 
+# Weather, streamed: the script sleeps between fetches and prints a line each
+# time, so ricebar starts one process instead of forking every interval. Its
+# icon is a Nerd Font weather glyph chosen from the condition text.
+#
+# Copy dev/scripts/weather.sh to ~/.config/ricebar/scripts/ first. Set
+# LOCATION in the command for a specific city; without one wttr.in guesses.
+[[module.custom]]
+name = "weather"
+exec = "LOCATION=Warsaw ~/.config/ricebar/scripts/weather.sh"
+stream = true
+tooltip = "Fetching weather..."
+
+# The simplest possible module: one command, plain text, a fixed tooltip.
+[[module.custom]]
+name = "kernel"
+exec = "uname -r"
+interval = 3600
+tooltip = "Running kernel"
+
 # Readouts from the kernel: cpu, memory, temperature, battery, backlight.
 # `format` takes {icon} and {value}; drop {value} for an icon on its own, the
 # way waybar's do. `background` fills behind just that module, so each can be
@@ -156,9 +190,3 @@ items = [
     { label = "\U000F0425  Shutdown", exec = "doas poweroff" },
 ]
 
-# The simplest possible form: plain text, with a fixed tooltip.
-# [[module.custom]]
-# name = "kernel"
-# exec = "uname -r"
-# interval = 3600
-# tooltip = "Running kernel"

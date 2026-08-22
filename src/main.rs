@@ -17,7 +17,7 @@ fn main() -> Result<(), iced_layershell::Error> {
     };
 
     let [top, right, bottom, left] = config.bar.margin;
-    let height = config.bar.height;
+    let height = config.bar.total_height();
 
     let exclusive_zone = if config.bar.exclusive {
         // A margin pushes the bar inwards, so the space to reserve is the bar

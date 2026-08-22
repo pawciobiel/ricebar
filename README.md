@@ -18,7 +18,11 @@ config, a Rust module API, and a script escape hatch for everything else.
 - **Compositor-agnostic.** A `Compositor` trait keeps the bar core free of
   compositor specifics. Hyprland, sway and niri are supported.
 - **Modules.** In-tree modules implement a `Module` trait. Anything else can be a
-  `[[module.custom]]` running a script — no Rust required.
+  `[[module.custom]]` running a script — no Rust required. A script can be kept
+  running and stream its updates, so a module reacts the moment something
+  happens instead of polling.
+- **More than one row.** `[[bar.row]]` stacks lines, each with its own left,
+  centre and right, and its own height.
 
 ## Configuration
 
@@ -60,6 +64,10 @@ name = "memory"
 exec = "free -m | awk '/^Mem:/ {printf \"%.0f%%\", $3/$2*100}'"
 interval = 5
 ```
+
+A module is up to three scripts: `exec` for what it shows, `tooltip` for hover,
+`on-click` for what a click does. Any may be left out — a `label` and an
+`on-click` with no `exec` is a launcher button.
 
 Hovering a module opens a tooltip on its own layer-shell surface, so it is not
 clipped by the bar's height. It is anchored under the module's region, which

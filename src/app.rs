@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use iced::widget::{container, mouse_area, row, space, text};
+use iced::widget::{column, container, mouse_area, row, space, text};
 use iced::{Alignment, Border, Color, Element, Length, Subscription, Task, window};
 use iced_layershell::reexport::{
     Anchor, KeyboardInteractivity, Layer, NewLayerShellSettings, OutputOption,
@@ -15,9 +15,8 @@ pub struct Bar {
     config: config::Config,
     /// Every enabled module, in one flat list so a single index identifies one.
     modules: Vec<Box<dyn Module>>,
-    left: Vec<usize>,
-    center: Vec<usize>,
-    right: Vec<usize>,
+    /// One entry per line of the bar, stacked top to bottom.
+    rows: Vec<Row>,
     /// The hover popup, when one is open.
     popup: Option<Popup>,
     /// The module the pointer is currently inside.
@@ -25,6 +24,14 @@ pub struct Bar {
     /// A popup we have asked to remove. Its surface may still ask to be drawn
     /// once more, and it must not fall through to rendering the whole bar.
     retiring: Option<window::Id>,
+}
+
+/// One line of the bar, holding indices into `modules`.
+struct Row {
+    height: u32,
+    left: Vec<usize>,
+    center: Vec<usize>,
+    right: Vec<usize>,
 }
 
 struct Popup {
@@ -54,24 +61,18 @@ impl Bar {
         let mut modules = Vec::new();
 
         let trusted = config.trusted;
-        let left = region(
-            &mut modules,
-            &config.bar.modules_left,
-            &config.module,
-            trusted,
-        );
-        let center = region(
-            &mut modules,
-            &config.bar.modules_center,
-            &config.module,
-            trusted,
-        );
-        let right = region(
-            &mut modules,
-            &config.bar.modules_right,
-            &config.module,
-            trusted,
-        );
+
+        let rows: Vec<Row> = config
+            .bar
+            .rows()
+            .into_iter()
+            .map(|line| Row {
+                height: line.height.unwrap_or(config.bar.height),
+                left: region(&mut modules, &line.modules_left, &config.module, trusted),
+                center: region(&mut modules, &line.modules_center, &config.module, trusted),
+                right: region(&mut modules, &line.modules_right, &config.module, trusted),
+            })
+            .collect();
 
         if modules.is_empty() {
             eprintln!("ricebar: no modules enabled; check the modules-* lists in config");
@@ -83,9 +84,7 @@ impl Bar {
         Self {
             config,
             modules,
-            left,
-            center,
-            right,
+            rows,
             popup: None,
             hovered: None,
             retiring: None,
@@ -319,9 +318,9 @@ fn popup_settings(
     // neither side is centred on that axis, and one anchored to a side cannot
     // run off it -- so the tooltip stays on screen without the bar's width,
     // which layer surfaces never report.
-    let side = if bar.left.contains(&index) {
+    let side = if bar.rows.iter().any(|row| row.left.contains(&index)) {
         Some(Anchor::Left)
-    } else if bar.right.contains(&index) {
+    } else if bar.rows.iter().any(|row| row.right.contains(&index)) {
         Some(Anchor::Right)
     } else {
         None
@@ -431,19 +430,26 @@ pub fn view(bar: &Bar, id: window::Id) -> Element<'_, Message> {
         .align_y(Alignment::Center)
     };
 
-    let content = row![
-        container(region(&bar.left)).width(Length::FillPortion(1)),
-        container(region(&bar.center)).center_x(Length::FillPortion(1)),
-        container(region(&bar.right)).align_right(Length::FillPortion(1)),
-    ]
-    .align_y(Alignment::Center);
+    let lines = bar.rows.iter().map(|line| {
+        let content = row![
+            container(region(&line.left)).width(Length::FillPortion(1)),
+            container(region(&line.center)).center_x(Length::FillPortion(1)),
+            container(region(&line.right)).align_right(Length::FillPortion(1)),
+        ]
+        .align_y(Alignment::Center);
 
-    container(content)
+        container(content)
+            .width(Length::Fill)
+            .height(Length::Fixed(line.height as f32))
+            // The row's own `align_y` only lines the modules up against each
+            // other. Without this each line sits at the top of its own height.
+            .align_y(bar.config.bar.vertical_align)
+            .into()
+    });
+
+    container(column(lines))
         .width(Length::Fill)
         .height(Length::Fill)
-        // The row's own `align_y` only lines the modules up against each other.
-        // Without this the whole row sits at the top of the bar's height.
-        .align_y(bar.config.bar.vertical_align)
         .padding([0.0, bar.config.bar.padding])
         .style(move |_theme| container::Style {
             background: Some(style.background.color().into()),

@@ -43,10 +43,57 @@ pub struct Bar {
     /// than by whatever the system happens to fall back to.
     pub font: Option<String>,
     pub font_size: f32,
+    /// The single row's modules. Ignored once `[[bar.row]]` is used.
     pub modules_left: Vec<String>,
     pub modules_center: Vec<String>,
     pub modules_right: Vec<String>,
+    /// Extra rows, stacked. A bar with none is one row built from the
+    /// `modules-*` lists above, which is the common case and stays simple.
+    pub row: Vec<Row>,
     pub style: Style,
+}
+
+/// One line of the bar. Several stack into a taller bar, each with its own
+/// left, centre and right.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
+pub struct Row {
+    /// Defaults to the bar's `height`.
+    pub height: Option<u32>,
+    pub modules_left: Vec<String>,
+    pub modules_center: Vec<String>,
+    pub modules_right: Vec<String>,
+}
+
+impl Bar {
+    /// The rows to draw, however they were written.
+    pub fn rows(&self) -> Vec<Row> {
+        if self.row.is_empty() {
+            return vec![Row {
+                height: Some(self.height),
+                modules_left: self.modules_left.clone(),
+                modules_center: self.modules_center.clone(),
+                modules_right: self.modules_right.clone(),
+            }];
+        }
+
+        self.row
+            .iter()
+            .map(|row| Row {
+                height: Some(row.height.unwrap_or(self.height)),
+                ..row.clone()
+            })
+            .collect()
+    }
+
+    /// How tall the whole bar is, which is what the surface and the space it
+    /// reserves are sized from.
+    pub fn total_height(&self) -> u32 {
+        self.rows()
+            .iter()
+            .map(|row| row.height.unwrap_or(self.height))
+            .sum()
+    }
 }
 
 impl Default for Bar {
@@ -64,6 +111,7 @@ impl Default for Bar {
             modules_left: vec![String::from("workspaces")],
             modules_center: vec![String::from("clock")],
             modules_right: Vec::new(),
+            row: Vec::new(),
             style: Style::default(),
         }
     }
