@@ -42,12 +42,12 @@ pub enum Event {
 ///
 /// The module says how big it needs to be and what goes in it; creating and
 /// destroying the surface is the bar's business.
+/// Sized in pixels rather than characters: a grid knows its own geometry
+/// exactly, and the surface cannot be resized once created.
 #[derive(Debug, Clone, Copy)]
 pub struct Popup {
-    /// Roughly how many characters wide.
-    pub columns: usize,
-    /// Roughly how many lines tall.
-    pub rows: usize,
+    pub width: f32,
+    pub height: f32,
 }
 
 /// What a module shows: a label, and optionally something longer to reveal on
@@ -105,22 +105,25 @@ pub trait Module {
 }
 
 /// Turn a name from config into a module.
-pub fn build(name: &str, config: &config::Modules) -> Option<Box<dyn Module>> {
+///
+/// `trusted` says whether the config may be taken as a source of shell
+/// commands; modules that run any refuse when it is false.
+pub fn build(name: &str, config: &config::Modules, trusted: bool) -> Option<Box<dyn Module>> {
     match name {
-        "clock" => Some(Box::new(clock::Clock::new(&config.clock))),
+        "clock" => Some(Box::new(clock::Clock::new(&config.clock, trusted))),
         "workspaces" => Some(Box::new(workspaces::Workspaces::new(&config.workspaces))),
         // Anything else is user-defined, by name.
         _ => config
             .custom
             .iter()
             .find(|custom| custom.name == name)
-            .map(|custom| Box::new(custom::Custom::new(custom)) as Box<dyn Module>)
+            .map(|custom| Box::new(custom::Custom::new(custom, trusted)) as Box<dyn Module>)
             .or_else(|| {
                 config
                     .menu
                     .iter()
                     .find(|menu| menu.name == name)
-                    .map(|menu| Box::new(menu::Menu::new(menu)) as Box<dyn Module>)
+                    .map(|menu| Box::new(menu::Menu::new(menu, trusted)) as Box<dyn Module>)
             }),
     }
 }

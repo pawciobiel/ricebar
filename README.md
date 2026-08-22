@@ -75,6 +75,27 @@ Missing config is normal and uses defaults. A *broken* config is reported on
 stderr, naming the line and the valid field names, and then falls back to
 defaults — a bar that refuses to start would leave you no way to fix it.
 
+### Running commands
+
+`[[module.custom]]`, `[[module.menu]]` and `on-click-day` all run shell
+commands, so **the config file is the trust boundary**: anyone who can write it
+can already run code as you. Validating the commands themselves would buy
+nothing, since an attacker editing the file could name an allowed path just as
+easily.
+
+What ricebar does check is whether anyone *else* can write the file — the same
+check `ssh` and `sudo` make of theirs. If the config, or the directory holding
+it, is group- or other-writable, the bar still starts and still draws, but it
+refuses to run any command and says so:
+
+```
+ricebar: ~/.config/ricebar/config.toml is writable by other users; refusing to run commands from it
+ricebar: fix with `chmod go-w ~/.config/ricebar/config.toml`
+```
+
+Values substituted into a command — currently only `{}` in `on-click-day` — are
+quoted for the shell before substitution.
+
 ## Build
 
 ```sh

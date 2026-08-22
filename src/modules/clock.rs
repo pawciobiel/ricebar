@@ -20,13 +20,15 @@ pub struct Clock {
 
 struct Calendar {
     week_numbers: bool,
+    weeks_pos: config::Side,
     start_monday: bool,
+    on_click_day: Option<String>,
     /// Months away from the current one, moved by the popup's arrows.
     offset: i32,
 }
 
 impl Clock {
-    pub fn new(config: &config::Clock) -> Self {
+    pub fn new(config: &config::Clock, trusted: bool) -> Self {
         let mut clock = Self {
             format: config.format.clone(),
             tooltip_format: config.tooltip_format.clone(),
@@ -35,7 +37,9 @@ impl Clock {
             label: String::new(),
             calendar: config.calendar.then_some(Calendar {
                 week_numbers: config.week_numbers,
+                weeks_pos: config.weeks_pos,
                 start_monday: config.start_monday,
+                on_click_day: trusted.then(|| config.on_click_day.clone()).flatten(),
                 offset: 0,
             }),
         };
@@ -45,6 +49,47 @@ impl Clock {
 
     fn refresh(&mut self) {
         self.label = render(&self.format);
+    }
+
+    /// Run the configured command for whichever day was clicked.
+    fn run_for_day(&self, cell: usize) -> Task<Event> {
+        let Some(calendar) = &self.calendar else {
+            return Task::none();
+        };
+
+        let Some(template) = &calendar.on_click_day else {
+            return Task::none();
+        };
+
+        let Some(shown) = month_of(Zoned::now().date(), calendar.offset) else {
+            return Task::none();
+        };
+
+        let Some(day) = calendar.weeks(shown).into_iter().flatten().nth(cell) else {
+            return Task::none();
+        };
+
+        // ISO 8601, which is what a script can parse without guessing.
+        let date = render_date("%Y-%m-%d", day);
+
+        let date = config::shell_quote(&date);
+
+        let command = if template.contains("{}") {
+            template.replace("{}", &date)
+        } else {
+            format!("{template} {date}")
+        };
+
+        Task::future(async move {
+            if let Err(error) = tokio::process::Command::new("sh")
+                .arg("-c")
+                .arg(&command)
+                .spawn()
+            {
+                eprintln!("ricebar: could not run `{command}`: {error}");
+            }
+        })
+        .discard()
     }
 }
 
@@ -71,6 +116,7 @@ impl Module for Clock {
                     calendar.offset = calendar.offset.saturating_add(months);
                 }
             }
+            Event::Activate(cell) => return self.run_for_day(cell),
             _ => {}
         }
 
@@ -111,12 +157,13 @@ impl Module for Clock {
 
     fn popup(&self) -> Option<Popup> {
         let calendar = self.calendar.as_ref()?;
+        let columns: f32 = if calendar.week_numbers { 8.0 } else { 7.0 };
 
         Some(Popup {
-            // Seven day columns of three characters, plus the week column.
-            columns: if calendar.week_numbers { 30 } else { 26 },
-            // A title, the weekday names, and up to six weeks.
-            rows: 8,
+            width: columns.mul_add(CELL, 2.0 * CALENDAR_PADDING),
+            // Always six week rows, even in a month that needs five: the
+            // surface cannot be resized, and paging must not clip the grid.
+            height: 6.0f32.mul_add(ROW, HEADER + WEEKDAYS + 2.0 * CALENDAR_PADDING),
         })
     }
 
@@ -133,6 +180,11 @@ const CELL: f32 = 26.0;
 /// The calendar fits a surface sized in advance, so it draws a little smaller
 /// than the bar's own text rather than following `font-size`.
 const CALENDAR_TEXT: f32 = 13.0;
+/// Row heights, used to size the surface before anything is drawn.
+const ROW: f32 = 19.0;
+const HEADER: f32 = 26.0;
+const WEEKDAYS: f32 = 19.0;
+const CALENDAR_PADDING: f32 = 8.0;
 
 impl Calendar {
     fn view(&self, style: config::Style) -> Element<'_, Event> {
@@ -157,8 +209,8 @@ impl Calendar {
         let mut weeks = column![].spacing(2);
         weeks = weeks.push(self.weekday_names(style));
 
-        for week in self.weeks(shown) {
-            weeks = weeks.push(self.week_row(&week, shown, today, style));
+        for (index, week) in self.weeks(shown).into_iter().enumerate() {
+            weeks = weeks.push(self.week_row(&week, index * 7, shown, today, style));
         }
 
         column![header, weeks].spacing(4).into()
@@ -211,34 +263,22 @@ impl Calendar {
             ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]
         };
 
-        let mut line = row![].spacing(0);
+        let days = names.into_iter().map(|name| cell(name, style.dim.color()));
 
-        if self.week_numbers {
-            line = line.push(cell("W", style.dim.color()));
-        }
-
-        for name in names {
-            line = line.push(cell(name, style.dim.color()));
-        }
-
-        line.into()
+        // "W" heads the week column, so it takes the week colour rather than
+        // the weekday one.
+        self.line(days, cell("W", style.accent.color()))
     }
 
     fn week_row<'a>(
         &self,
         week: &[Date],
+        first_cell: usize,
         shown: Date,
         today: Date,
         style: config::Style,
     ) -> Element<'a, Event> {
-        let mut line = row![].spacing(0);
-
-        if self.week_numbers {
-            let number = week[0].iso_week_date().week();
-            line = line.push(cell(number.to_string(), style.dim.color()));
-        }
-
-        for day in week {
+        let days = week.iter().enumerate().map(|(offset, day)| {
             let colour = if *day == today {
                 style.urgent.color()
             } else if day.month() == shown.month() {
@@ -247,11 +287,72 @@ impl Calendar {
                 style.dim.color()
             };
 
-            line = line.push(cell(day.day().to_string(), colour));
+            match self.on_click_day {
+                // Only clickable when something is configured to receive it,
+                // so the grid stays plain text otherwise.
+                Some(_) => day_button(day.day().to_string(), colour, first_cell + offset, style),
+                None => cell(day.day().to_string(), colour),
+            }
+        });
+
+        let number = week[0].iso_week_date().week();
+
+        self.line(days, cell(number.to_string(), style.accent.color()))
+    }
+
+    /// Lay out a row, putting the week column on whichever side is configured.
+    fn line<'a>(
+        &self,
+        days: impl Iterator<Item = Element<'a, Event>>,
+        week: Element<'a, Event>,
+    ) -> Element<'a, Event> {
+        let mut line = row![].spacing(0);
+
+        if self.week_numbers && self.weeks_pos == config::Side::Left {
+            line = line.push(week);
+            for day in days {
+                line = line.push(day);
+            }
+        } else {
+            for day in days {
+                line = line.push(day);
+            }
+            if self.week_numbers {
+                line = line.push(week);
+            }
         }
 
         line.into()
     }
+}
+
+fn day_button<'a>(
+    label: String,
+    colour: iced::Color,
+    cell_index: usize,
+    style: config::Style,
+) -> Element<'a, Event> {
+    button(
+        container(text(label).size(CALENDAR_TEXT).color(colour))
+            .width(Length::Fill)
+            .center_x(Length::Fill),
+    )
+    .width(Length::Fixed(CELL))
+    .padding(0)
+    .on_press(Event::Activate(cell_index))
+    .style(move |_theme, status| button::Style {
+        background: match status {
+            button::Status::Hovered | button::Status::Pressed => Some(style.muted.color().into()),
+            _ => None,
+        },
+        text_color: colour,
+        border: iced::Border {
+            radius: 3.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    })
+    .into()
 }
 
 fn cell<'a>(label: impl text::IntoFragment<'a>, colour: iced::Color) -> Element<'a, Event> {
@@ -302,6 +403,24 @@ fn render(format: &str) -> String {
     strtime::format(format, &Zoned::now()).unwrap_or_else(|_| String::from("bad format"))
 }
 
+/// `Subscription::run_with` takes a plain fn pointer and hashes the data it is
+/// keyed on, so two clocks configured at different intervals stay distinct.
+fn ticks(interval: &Duration) -> impl Stream<Item = Event> + use<> {
+    let interval = *interval;
+
+    iced::stream::channel(1, async move |mut output| {
+        let mut timer = tokio::time::interval(interval);
+
+        loop {
+            timer.tick().await;
+
+            if output.send(Event::Tick).await.is_err() {
+                return;
+            }
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -310,7 +429,9 @@ mod tests {
     fn calendar(start_monday: bool) -> Calendar {
         Calendar {
             week_numbers: true,
+            weeks_pos: config::Side::Right,
             start_monday,
+            on_click_day: None,
             offset: 0,
         }
     }
@@ -367,22 +488,4 @@ mod tests {
         // the month is what keeps this from failing.
         assert_eq!(month_of(date(2026, 1, 31), 1), Some(date(2026, 2, 1)));
     }
-}
-
-/// `Subscription::run_with` takes a plain fn pointer and hashes the data it is
-/// keyed on, so two clocks configured at different intervals stay distinct.
-fn ticks(interval: &Duration) -> impl Stream<Item = Event> + use<> {
-    let interval = *interval;
-
-    iced::stream::channel(1, async move |mut output| {
-        let mut timer = tokio::time::interval(interval);
-
-        loop {
-            timer.tick().await;
-
-            if output.send(Event::Tick).await.is_err() {
-                return;
-            }
-        }
-    })
 }

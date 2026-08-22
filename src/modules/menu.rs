@@ -9,19 +9,26 @@ use iced::{Element, Length, Task};
 use super::{Event, Module, Popup};
 use crate::config;
 
+/// Per-entry metrics, used to size the surface before anything is drawn.
+const ENTRY_GLYPH: f32 = 9.5;
+const ENTRY_HEIGHT: f32 = 24.0;
+const ENTRY_PADDING: f32 = 10.0;
+
 pub struct Menu {
     name: String,
     label: String,
     items: Vec<config::MenuItem>,
+    trusted: bool,
     tooltip: Option<String>,
 }
 
 impl Menu {
-    pub fn new(config: &config::Menu) -> Self {
+    pub fn new(config: &config::Menu, trusted: bool) -> Self {
         Self {
             name: config.name.clone(),
             label: config.label.clone(),
             items: config.items.clone(),
+            trusted,
             tooltip: config.tooltip.clone(),
         }
     }
@@ -36,6 +43,11 @@ impl Module for Menu {
         let Event::Activate(index) = event else {
             return Task::none();
         };
+
+        if !self.trusted {
+            eprintln!("ricebar: refusing to run menu commands from a config others can write");
+            return Task::none();
+        }
 
         let Some(item) = self.items.get(index) else {
             return Task::none();
@@ -84,14 +96,18 @@ impl Module for Menu {
     }
 
     fn popup(&self) -> Option<Popup> {
+        let widest = self
+            .items
+            .iter()
+            .map(|item| item.label.chars().count())
+            .max()
+            .unwrap_or(0) as f32;
+
         Some(Popup {
-            columns: self
-                .items
-                .iter()
-                .map(|item| item.label.chars().count())
-                .max()
-                .unwrap_or(0),
-            rows: self.items.len(),
+            // Text cannot be measured outside a renderer, so this over-estimates
+            // rather than risk clipping a label.
+            width: widest.mul_add(ENTRY_GLYPH, 2.0 * ENTRY_PADDING),
+            height: (self.items.len() as f32).mul_add(ENTRY_HEIGHT, 2.0 * ENTRY_PADDING),
         })
     }
 

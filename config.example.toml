@@ -46,8 +46,14 @@ interval = 1                       # seconds
 # `calendar` is what clicking opens. Either can be used without the other.
 tooltip-format = "%A, %-d %B %Y"
 calendar = true                    # click the clock for a month view
-week-numbers = true                # ISO week numbers down the left
+week-numbers = true                # ISO week numbers beside the grid
+weeks-pos = "right"                # which side they sit on: left | right
 start-monday = true                # false starts weeks on Sunday
+
+# Run when a day is clicked. `{}` becomes the date in ISO form, already quoted
+# for the shell; without it the date is appended. Commented out by default,
+# since a calendar that launches things on a stray click is a surprise.
+# on-click-day = "notify-send 'Selected' {}"
 
 [module.workspaces]
 show-empty = true

@@ -53,9 +53,25 @@ impl Bar {
     pub fn new(config: config::Config) -> Self {
         let mut modules = Vec::new();
 
-        let left = region(&mut modules, &config.bar.modules_left, &config.module);
-        let center = region(&mut modules, &config.bar.modules_center, &config.module);
-        let right = region(&mut modules, &config.bar.modules_right, &config.module);
+        let trusted = config.trusted;
+        let left = region(
+            &mut modules,
+            &config.bar.modules_left,
+            &config.module,
+            trusted,
+        );
+        let center = region(
+            &mut modules,
+            &config.bar.modules_center,
+            &config.module,
+            trusted,
+        );
+        let right = region(
+            &mut modules,
+            &config.bar.modules_right,
+            &config.module,
+            trusted,
+        );
 
         if modules.is_empty() {
             eprintln!("ricebar: no modules enabled; check the modules-* lists in config");
@@ -82,11 +98,12 @@ fn region(
     modules: &mut Vec<Box<dyn Module>>,
     names: &[String],
     config: &config::Modules,
+    trusted: bool,
 ) -> Vec<usize> {
     let mut indices = Vec::new();
 
     for name in names {
-        match modules::build(name, config) {
+        match modules::build(name, config, trusted) {
             Some(module) => {
                 indices.push(modules.len());
                 modules.push(module);
@@ -224,7 +241,14 @@ fn open_popup(bar: &mut Bar) -> Task<Message> {
 
     let closed = close_popup(bar);
     let id = window::Id::unique();
-    let settings = popup_settings(bar, index, tooltip.chars().count(), 1, true);
+    // Text cannot be measured outside a renderer, so a tooltip's surface is
+    // estimated from its glyph count, scaled by the bar's font size.
+    let font_size = bar.config.bar.font_size;
+    let width = (tooltip.chars().count() as f32)
+        .mul_add(font_size * TOOLTIP_GLYPH_RATIO, 2.0 * TOOLTIP_PADDING);
+    let height = font_size.mul_add(TOOLTIP_LINE_RATIO, 2.0 * TOOLTIP_PADDING);
+
+    let settings = popup_settings(bar, index, width, height, true);
 
     bar.popup = Some(Popup {
         id,
@@ -254,7 +278,7 @@ fn toggle_popup(bar: &mut Bar, index: usize) -> Task<Message> {
     let closed = close_popup(bar);
     let id = window::Id::unique();
     // Unlike a tooltip, this one accepts pointer input, since it is clicked.
-    let settings = popup_settings(bar, index, shape.columns, shape.rows, false);
+    let settings = popup_settings(bar, index, shape.width, shape.height, false);
 
     bar.popup = Some(Popup {
         id,
@@ -276,8 +300,7 @@ fn close_popup(bar: &mut Bar) -> Task<Message> {
     }
 }
 
-/// Build the surface for a tooltip or a menu, sized for `columns` characters
-/// across and `rows` lines down.
+/// Build the surface for a tooltip or a module's own popup, at the given size.
 ///
 /// Both are layer surfaces rather than xdg popups. The runtime builds popups
 /// with a grab, which suits a menu but takes every pointer event away from the
@@ -285,16 +308,12 @@ fn close_popup(bar: &mut Bar) -> Task<Message> {
 fn popup_settings(
     bar: &Bar,
     index: usize,
-    columns: usize,
-    rows: usize,
+    width: f32,
+    height: f32,
     transparent_to_events: bool,
 ) -> NewLayerShellSettings {
-    let font_size = bar.config.bar.font_size;
-    let width = (columns as f32)
-        .mul_add(font_size * TOOLTIP_GLYPH_RATIO, 2.0 * TOOLTIP_PADDING)
-        .clamp(48.0, 720.0) as u32;
-    let height =
-        (rows as f32).mul_add(font_size * TOOLTIP_LINE_RATIO, 2.0 * TOOLTIP_PADDING) as u32;
+    let width = width.clamp(48.0, 720.0) as u32;
+    let height = height.max(1.0) as u32;
 
     // Anchor under the module's own region. A layer surface anchored to
     // neither side is centred on that axis, and one anchored to a side cannot

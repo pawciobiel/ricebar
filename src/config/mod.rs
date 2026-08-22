@@ -13,6 +13,14 @@ use serde::Deserialize;
 pub struct Config {
     pub bar: Bar,
     pub module: Modules,
+    /// Whether the config is safe to take shell commands from. See
+    /// [`trustworthy`]. Not a config key; decided when the file is read.
+    #[serde(skip, default = "yes")]
+    pub trusted: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -191,10 +199,24 @@ pub struct Clock {
     pub interval: u64,
     /// Open a calendar when the clock is clicked.
     pub calendar: bool,
-    /// Show ISO week numbers down the left of the calendar.
+    /// Show ISO week numbers beside the calendar.
     pub week_numbers: bool,
+    /// Which side those numbers sit on.
+    pub weeks_pos: Side,
     /// Start weeks on Monday rather than Sunday.
     pub start_monday: bool,
+    /// Run when a day is clicked. `{}` is replaced with the date in ISO form,
+    /// and if it is absent the date is appended instead.
+    #[serde(default)]
+    pub on_click_day: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Side {
+    #[default]
+    Left,
+    Right,
 }
 
 impl Default for Clock {
@@ -205,7 +227,9 @@ impl Default for Clock {
             interval: 1,
             calendar: true,
             week_numbers: true,
+            weeks_pos: Side::Right,
             start_monday: true,
+            on_click_day: None,
         }
     }
 }
@@ -255,9 +279,10 @@ pub fn load() -> Config {
         }
     };
 
-    match toml::from_str(&text) {
-        Ok(config) => {
+    match toml::from_str::<Config>(&text) {
+        Ok(mut config) => {
             eprintln!("ricebar: loaded {}", path.display());
+            config.trusted = trustworthy(&path);
             config
         }
         Err(error) => {
@@ -266,4 +291,54 @@ pub fn load() -> Config {
             Config::default()
         }
     }
+}
+
+/// Whether shell commands in this config may be run.
+///
+/// The config file *is* the trust boundary: it names commands to execute, so
+/// anyone who can write it can already run code as this user. Validating the
+/// commands themselves would buy nothing — an attacker who can edit the file
+/// can just as easily name an allowed path. What is worth checking is whether
+/// anyone *else* can write it, which is the same check ssh and sudo make of
+/// their own files.
+fn trustworthy(path: &std::path::Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+
+    let writable_by_others = |path: &std::path::Path| match std::fs::metadata(path) {
+        // 0o022 is the group-write and other-write bits.
+        Ok(metadata) => metadata.permissions().mode() & 0o022 != 0,
+        Err(_) => false,
+    };
+
+    if writable_by_others(path) {
+        eprintln!(
+            "ricebar: {} is writable by other users; refusing to run commands from it",
+            path.display()
+        );
+        eprintln!("ricebar: fix with `chmod go-w {}`", path.display());
+        return false;
+    }
+
+    // A writable directory means the file can simply be replaced.
+    if let Some(parent) = path.parent()
+        && writable_by_others(parent)
+    {
+        eprintln!(
+            "ricebar: {} is writable by other users; refusing to run commands from configs inside it",
+            parent.display()
+        );
+        eprintln!("ricebar: fix with `chmod go-w {}`", parent.display());
+        return false;
+    }
+
+    true
+}
+
+/// Wrap a value so a shell treats it as one literal argument.
+///
+/// Today the only substituted value is a date this program formats itself, but
+/// quoting keeps that from becoming an injection the day something reads a
+/// value from elsewhere.
+pub fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', r"'\''"))
 }

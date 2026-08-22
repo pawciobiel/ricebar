@@ -18,21 +18,31 @@ use crate::config;
 
 pub struct Custom {
     name: String,
-    command: String,
+    /// None when the config is not trusted to supply shell commands.
+    command: Option<String>,
     interval: Duration,
     content: Content,
 }
 
 impl Custom {
-    pub fn new(config: &config::Custom) -> Self {
+    pub fn new(config: &config::Custom, trusted: bool) -> Self {
         Self {
             name: config.name.clone(),
-            command: config.exec.clone(),
+            // An untrusted config still names the module, so it keeps its place
+            // in the bar; it simply never runs anything.
+            command: trusted.then(|| config.exec.clone()),
             // A zero interval would re-run the command as fast as it completes.
             interval: Duration::from_secs(config.interval.max(1)),
-            content: Content {
-                text: String::new(),
-                tooltip: config.tooltip.clone(),
+            content: if trusted {
+                Content {
+                    text: String::new(),
+                    tooltip: config.tooltip.clone(),
+                }
+            } else {
+                Content::error(format!(
+                    "`{}` will not run: the config is writable by other users",
+                    config.name
+                ))
             },
         }
     }
@@ -44,9 +54,13 @@ impl Module for Custom {
     }
 
     fn subscription(&self) -> Subscription<Event> {
+        let Some(command) = self.command.clone() else {
+            return Subscription::none();
+        };
+
         // Keyed on the command and interval, so two custom modules never share
         // a stream. See the note in app::subscription.
-        Subscription::run_with((self.command.clone(), self.interval), run)
+        Subscription::run_with((command, self.interval), run)
     }
 
     fn update(&mut self, event: Event) -> Task<Event> {
