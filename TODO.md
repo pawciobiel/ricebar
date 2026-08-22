@@ -231,9 +231,42 @@ bar or hand it an absurd surface to draw.
       the user has to find the example. Create the directory and write a
       commented default the first time, then say where it went. Never
       overwrite an existing one, and keep working if the directory cannot be
-      created.
+      created. Goes together with *(shipping the example scripts)*, since what
+      that default enables depends on what is installed alongside it.
 
 ## Packaging
+
+- [ ] **Ship the example scripts, and start with them.** `dev/scripts/` is
+      where the bar's range actually shows: streaming, popups, tickers, icons
+      chosen from a reported value. A first run on bare defaults shows a clock
+      and some workspaces, which is not what the thing does.
+
+      Install them somewhere a package can own — `/usr/share/ricebar/scripts/`
+      — and have the first-run config copy or reference them, alongside
+      *(writing a default config on first run)*.
+
+      The tension worth getting right: a fresh install that shows its range,
+      without a fresh install full of warning triangles. Each script needs
+      something not everyone has:
+
+      | script             | needs                                  |
+      |--------------------|----------------------------------------|
+      | `volume.sh`        | `pactl` (PipeWire or PulseAudio)       |
+      | `network.sh`       | `ip`, `iw`                             |
+      | `weather.sh`       | `curl`, and the network                |
+      | `ticker.sh`        | `top`, `df`, `free`                    |
+      | `stocks.sh`        | `curl`, `python3`, **and an API key**  |
+      | `windows-popup.sh` | `python3`, and a compositor CLI        |
+
+      So the default config should enable the ones whose dependencies are
+      present and leave the rest commented with a line saying what they want.
+      `stocks.sh` stays commented regardless: it cannot work without a key,
+      and a module reading "no API key" on every fresh install is worse than
+      one that is not there.
+
+      Deciding what is present is itself a question — checking at first-run
+      only bakes in whatever was installed that day, so it may be better for
+      a module to say what it is missing than for the config to guess.
 
 - [ ] **Publish to crates.io.** The name is free. Needs a real README badge set,
       a licence header check and a `cargo publish --dry-run`.
