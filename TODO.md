@@ -184,6 +184,18 @@ state a script cannot see.
       a licence header check and a `cargo publish --dry-run`.
 - [ ] **`CLAUDE.md`** with build, lint and test commands for future sessions.
 
+## Failure behaviour
+
+A module that breaks shows `U+F071`, a warning triangle, in the `urgent`
+colour, with the reason on hover. Verified against a command that does not
+exist, one exiting non-zero, one that never returns, one printing malformed
+JSON, and a stream that dies without printing: all five mark themselves and
+none of them stops the bar or its other modules.
+
+- [ ] **A module that has gone stale.** A streaming script that stops printing
+      looks identical to one with nothing to say. Worth marking a module whose
+      last update is far older than its interval.
+
 ## Known constraints (not bugs)
 
 - Tooltips are layer surfaces, never xdg popups. `iced_layershell` builds

@@ -499,13 +499,23 @@ async fn follow(
     };
 
     let mut lines = BufReader::new(stdout).lines();
+    let mut said_anything = false;
 
     while let Ok(Some(line)) = lines.next_line().await {
+        said_anything = true;
+
         if output.send(Event::Content(parse(&line))).await.is_err() {
             // Stop the command rather than leave it running unread.
             let _ = child.start_kill();
             return Err(());
         }
+    }
+
+    // A stream that keeps ending without printing is broken, not quiet, and
+    // would otherwise leave the module blank forever while it retried.
+    if !said_anything {
+        let content = Content::error(String::from("the command ended without printing anything"));
+        return output.send(Event::Content(content)).await.map_err(|_| ());
     }
 
     Ok(())
@@ -539,14 +549,17 @@ fn parse(line: &str) -> Content {
 
     // Plain text is by far the common case, so only try JSON when it looks
     // like an object.
-    if line.starts_with('{')
-        && let Ok(parsed) = serde_json::from_str::<Output>(line)
-    {
-        return Content {
-            text: parsed.text,
-            tooltip: parsed.tooltip,
-            failed: false,
-            percentage: parsed.percentage,
+    if line.starts_with('{') {
+        return match serde_json::from_str::<Output>(line) {
+            Ok(parsed) => Content {
+                text: parsed.text,
+                tooltip: parsed.tooltip,
+                failed: false,
+                percentage: parsed.percentage,
+            },
+            // It meant to be JSON and is not, so say so rather than printing
+            // the broken JSON into the bar as though it were a reading.
+            Err(error) => Content::error(format!("{error}\n\n{line}")),
         };
     }
 

@@ -80,6 +80,11 @@ Nerd Font glyph as `text` and the numbers as `tooltip`, and set `font` to a
 family that carries icon glyphs. See `memory` in
 [`config.example.toml`](config.example.toml).
 
+A module that breaks shows a warning triangle in the `urgent` colour, with the
+reason on hover, and the rest of the bar carries on. A command that does not
+exist, exits non-zero, never returns, or prints malformed JSON all end up
+there rather than taking the bar down or leaving a blank space.
+
 Missing config is normal and uses defaults. A *broken* config is reported on
 stderr, naming the line and the valid field names, and then falls back to
 defaults — a bar that refuses to start would leave you no way to fix it.
