@@ -50,10 +50,16 @@ week-numbers = true                # ISO week numbers beside the grid
 weeks-pos = "right"                # which side they sit on: left | right
 start-monday = true                # false starts weeks on Sunday
 
-# Run when a day is clicked. `{}` becomes the date in ISO form, already quoted
-# for the shell; without it the date is appended. Commented out by default,
-# since a calendar that launches things on a stray click is a surprise.
-# on-click-day = "notify-send 'Selected' {}"
+# Run when a day is clicked. `{}` becomes the date in ISO form (2026-08-22),
+# already quoted for the shell; without it the date is appended.
+#
+# This one only shows a notification, so it is safe to leave on and obvious
+# when it fires. Swap it for whatever should happen instead:
+#
+#   on-click-day = "~/bin/agenda.py {}"
+#   on-click-day = "thunderbird -calendar -showdate {}"
+#   on-click-day = "khal list {} {}"
+on-click-day = "notify-send ricebar {}"
 
 [module.workspaces]
 show-empty = true
