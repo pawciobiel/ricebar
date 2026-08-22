@@ -150,8 +150,10 @@ label = "\uf2d2"
 tooltip = "Open windows"
 popup = "~/.config/ricebar/scripts/windows-popup.sh"
 
-# Stock quotes from finnhub.io. Needs a free API key, kept in a file of its
-# own rather than here -- see the header of dev/scripts/stocks.sh:
+# Markets. Indices and zloty rates need no key at all, so this works as it
+# stands. Individual company quotes come from finnhub, which does need one:
+# set SYMBOLS and put a key in a file of its own rather than here -- see the
+# header of dev/scripts/stocks.sh:
 #
 #   printf '%s\n' 'YOUR_KEY' > ~/.config/ricebar/finnhub.token
 #   chmod 600 ~/.config/ricebar/finnhub.token

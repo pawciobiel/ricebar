@@ -255,14 +255,16 @@ bar or hand it an absurd surface to draw.
       | `network.sh`       | `ip`, `iw`                             |
       | `weather.sh`       | `curl`, and the network                |
       | `ticker.sh`        | `top`, `df`, `free`                    |
-      | `stocks.sh`        | `curl`, `python3`, **and an API key**  |
+      | `stocks.sh`        | `curl`, `python3`                      |
       | `windows-popup.sh` | `python3`, and a compositor CLI        |
 
       So the default config should enable the ones whose dependencies are
       present and leave the rest commented with a line saying what they want.
-      `stocks.sh` stays commented regardless: it cannot work without a key,
-      and a module reading "no API key" on every fresh install is worse than
-      one that is not there.
+      None of them needs an API key any more: `stocks.sh` reports indices and
+      zloty rates out of the box, from Yahoo and the Polish central bank, and
+      only individual company quotes want a finnhub key. Those are off unless
+      `SYMBOLS` is set, so a fresh install shows markets rather than a module
+      complaining about a key nobody asked for.
 
       Deciding what is present is itself a question — checking at first-run
       only bakes in whatever was installed that day, so it may be better for

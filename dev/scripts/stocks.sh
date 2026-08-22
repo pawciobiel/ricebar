@@ -8,7 +8,10 @@
 #   scroll-width = 46
 #   scroll-speed = 6
 #
-# The API needs a key. Put it in a file of its own rather than in config.toml,
+# Indices and currencies need no key at all. Only individual company quotes
+# do, from finnhub; without one this simply reports the rest.
+#
+# For those, put the key in a file of its own rather than in config.toml,
 # which is read by ricebar itself and meant to be shareable:
 #
 #   mkdir -p ~/.config/ricebar
@@ -21,7 +24,10 @@
 # The key is handed to curl on stdin, never as an argument, so it does not
 # appear in `ps` output for every user on the machine to read.
 
-SYMBOLS="${SYMBOLS:-AAPL MSFT NVDA}"
+# Individual company quotes come from finnhub, which is the only part that
+# needs an API key -- so this is empty by default and the script is useful
+# without one. Set it, and put a key where read_token looks, to add them.
+SYMBOLS="${SYMBOLS:-}"
 # Currencies quoted against the zloty, from the Polish central bank. No key,
 # and it is the authoritative source for PLN -- finnhub's forex is paid.
 # Leave empty to skip.
@@ -128,19 +134,18 @@ print(f"{code}/PLN {now:.4f} {arrow}{abs(change):.1f}%")
 
 while :; do
     token=$(read_token)
-
-    if [ -z "$token" ]; then
-        printf '{"text":"stocks: no API key","tooltip":"Put one in %s"}\n' "$token_file"
-        sleep "$EVERY"
-        continue
-    fi
-
     feed=""
 
-    for symbol in $SYMBOLS; do
-        entry=$(quote "$symbol" "$token") || continue
-        feed="${feed:+$feed$(printf "$SEPARATOR")}$entry"
-    done
+    if [ -n "$SYMBOLS" ] && [ -z "$token" ]; then
+        # Asked for company quotes without the key they need. Say so once,
+        # in the feed, rather than dropping them silently.
+        feed="no API key in $token_file"
+    else
+        for symbol in $SYMBOLS; do
+            entry=$(quote "$symbol" "$token") || continue
+            feed="${feed:+$feed$(printf "$SEPARATOR")}$entry"
+        done
+    fi
 
     for pair in $INDICES; do
         entry=$(index_quote "$pair") || continue
