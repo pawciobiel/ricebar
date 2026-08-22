@@ -55,10 +55,11 @@ work does not have to be rediscovered.
 
 ## Modules
 
-- [ ] **Built-in battery, volume, network and temperature modules.** All four
-      are possible today as `[[module.custom]]` scripts; built-ins would give
-      them icons, thresholds and click actions without a shell round trip.
-      Battery and temperature can read sysfs directly.
+- [x] **Built-in cpu, memory, temperature, battery and backlight.** One
+      `sensor` module with five sources, since they differ only in where the
+      number comes from. `format` takes `{icon}` and `{value}`, and each takes
+      its own `background`/`foreground`. Still to do: **volume** and
+      **network**, which need PulseAudio/D-Bus rather than a sysfs read.
 - [ ] **Keyboard layout module.** Needs compositor support: Hyprland reports it
       over `.socket2.sock` (`activelayout>>`), so it likely belongs behind the
       `Compositor` trait rather than in a module reading the compositor itself.
@@ -78,13 +79,13 @@ Anything here can be approximated today with `[[module.custom]]` plus a script;
 a built-in earns its place by removing the shell round trip, or by needing
 state a script cannot see.
 
-- [ ] **cpu** — `U+F2DB`. Icon in the bar, usage percent in the tooltip.
-- [ ] **temperature** — `U+F76B` `U+F2C9` `U+F769` chosen by level, with a
-      critical threshold that recolours. Reads sysfs/hwmon.
-- [ ] **battery** — `U+F244`…`U+F240` by charge, `U+F1E6` plugged,
-      `U+F5E7` charging. Needs warning and critical states.
-- [ ] **backlight** — nine icons `U+E38D` `U+E39B` `U+E3C8` `U+E3CA` `U+E3CD`
-      `U+E3CE` `U+E3CF` `U+E3D1` `U+E3D3` by brightness. Scroll to change.
+- [x] **cpu** — done, from `/proc/stat` deltas.
+- [x] **temperature** — done, preferring hwmon `k10temp`/`coretemp` over the
+      ACPI zone. Outstanding: a critical threshold that recolours.
+- [x] **battery** — done, with the charging glyph when charging.
+      Outstanding: warning and critical states.
+- [x] **backlight** — done, nine icons by brightness. Outstanding: scroll to
+      change, which needs scroll events on modules.
 - [ ] **pulseaudio** — `U+F026` `U+F027` `U+F028` by volume, `U+F131` muted,
       plus per-device icons (headphone `U+F025`, headset `U+F590`,
       phone `U+F095`, portable `U+F10B`, car `U+F1B9`). Scroll to change,

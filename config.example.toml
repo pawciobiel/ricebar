@@ -24,7 +24,7 @@ font-size = 16
 
 modules-left = ["workspaces"]
 modules-center = ["clock"]
-modules-right = ["memory", "power"]
+modules-right = ["cpu", "memory", "temperature", "backlight", "battery", "power"]
 
 [bar.style]
 # #rgb, #rgba, #rrggbb and #rrggbbaa all work.
@@ -75,14 +75,38 @@ compositor = "auto"
 # A command may print plain text, or a JSON object with "text" and an optional
 # "tooltip". Anything that fails prints "!" with the reason in its tooltip.
 
-# Shows an icon, with the numbers on hover -- the same split waybar makes with
-# "format" and "tooltip-format". \357\203\211 is UTF-8 for U+F0C9, the Nerd
-# Font memory glyph, written as octal so this file stays plain ASCII. It needs
-# `font` above to name a font that carries icon glyphs.
-[[module.custom]]
-name = "memory"
-exec = '''free -m | awk '/^Mem:/ {printf "{\"text\":\"\357\203\211\",\"tooltip\":\"%.0f%% - %d MiB of %d MiB used\"}", $3/$2*100, $3, $2}' '''
+# Readouts from the kernel: cpu, memory, temperature, battery, backlight.
+# `format` takes {icon} and {value}; drop {value} for an icon on its own, the
+# way waybar's do. `background` fills behind just that module, so each can be
+# tinted differently. `icons` overrides the built-in Nerd Font set, lowest
+# level first.
+
+[module.cpu]
+format = "{icon} {value}"
+interval = 2
+background = "#313244"
+
+[module.memory]
+format = "{icon} {value}"
 interval = 5
+background = "#313244"
+
+[module.temperature]
+format = "{icon} {value}"
+interval = 5
+background = "#313244"
+foreground = "#f9e2af"
+
+[module.backlight]
+format = "{icon} {value}"
+interval = 5
+background = "#313244"
+
+[module.battery]
+format = "{icon} {value}"
+interval = 10
+background = "#313244"
+foreground = "#a6e3a1"
 
 # A menu module shows a label and opens a list of commands when clicked.
 # Clicking an entry runs it and closes the menu; clicking the label again just

@@ -6,6 +6,7 @@
 pub mod clock;
 pub mod custom;
 pub mod menu;
+pub mod sensor;
 pub mod workspaces;
 
 use iced::{Element, Subscription, Task};
@@ -112,6 +113,26 @@ pub fn build(name: &str, config: &config::Modules, trusted: bool) -> Option<Box<
     match name {
         "clock" => Some(Box::new(clock::Clock::new(&config.clock, trusted))),
         "workspaces" => Some(Box::new(workspaces::Workspaces::new(&config.workspaces))),
+        "cpu" => Some(Box::new(sensor::Sensor::new(
+            sensor::Kind::Cpu,
+            &config.cpu,
+        ))),
+        "memory" => Some(Box::new(sensor::Sensor::new(
+            sensor::Kind::Memory,
+            &config.memory,
+        ))),
+        "temperature" => Some(Box::new(sensor::Sensor::new(
+            sensor::Kind::Temperature,
+            &config.temperature,
+        ))),
+        "battery" => Some(Box::new(sensor::Sensor::new(
+            sensor::Kind::Battery,
+            &config.battery,
+        ))),
+        "backlight" => Some(Box::new(sensor::Sensor::new(
+            sensor::Kind::Backlight,
+            &config.backlight,
+        ))),
         // Anything else is user-defined, by name.
         _ => config
             .custom

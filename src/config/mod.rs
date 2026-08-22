@@ -139,10 +139,44 @@ impl Default for Style {
 pub struct Modules {
     pub clock: Clock,
     pub workspaces: Workspaces,
+    pub cpu: Sensor,
+    pub memory: Sensor,
+    pub temperature: Sensor,
+    pub battery: Sensor,
+    pub backlight: Sensor,
     /// User-defined command modules, each enabled by its own `name`.
     pub custom: Vec<Custom>,
     /// User-defined menu modules, each enabled by its own `name`.
     pub menu: Vec<Menu>,
+}
+
+/// A readout taken from the kernel: cpu, memory, temperature, battery or
+/// backlight. They share a shape, so they share their settings.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
+pub struct Sensor {
+    /// `{icon}` and `{value}` are replaced. Drop `{value}` for an icon alone.
+    pub format: String,
+    /// Lowest level first. Empty uses the built-in set for that sensor.
+    pub icons: Vec<String>,
+    /// Seconds between reads.
+    pub interval: u64,
+    /// Fill behind this module. Unset draws on the bar's own background.
+    pub background: Option<Rgba>,
+    /// Text colour for this module, overriding the bar's.
+    pub foreground: Option<Rgba>,
+}
+
+impl Default for Sensor {
+    fn default() -> Self {
+        Self {
+            format: String::from("{icon} {value}"),
+            icons: Vec::new(),
+            interval: 5,
+            background: None,
+            foreground: None,
+        }
+    }
 }
 
 /// A module that shows a label and opens a menu of commands when clicked.
