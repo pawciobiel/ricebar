@@ -34,17 +34,21 @@ icon_for() {
 }
 
 while :; do
-    reading=$(curl -sf --max-time 15 "https://wttr.in/${LOCATION}?format=%t|%C|%h|%w" 2>/dev/null)
+    # %l comes back as whatever the place resolved to, which is worth
+    # showing: it names the city when several modules watch different ones,
+    # and reveals where the IP guess landed when LOCATION is empty.
+    reading=$(curl -sf --max-time 15 "https://wttr.in/${LOCATION}?format=%l|%t|%C|%h|%w" 2>/dev/null)
 
     if [ -n "$reading" ]; then
-        temperature=$(printf '%s' "$reading" | cut -d'|' -f1 | tr -d ' +')
-        condition=$(printf '%s' "$reading" | cut -d'|' -f2)
-        humidity=$(printf '%s' "$reading" | cut -d'|' -f3)
-        wind=$(printf '%s' "$reading" | cut -d'|' -f4)
+        place=$(printf '%s' "$reading" | cut -d'|' -f1)
+        temperature=$(printf '%s' "$reading" | cut -d'|' -f2 | tr -d ' +')
+        condition=$(printf '%s' "$reading" | cut -d'|' -f3)
+        humidity=$(printf '%s' "$reading" | cut -d'|' -f4)
+        wind=$(printf '%s' "$reading" | cut -d'|' -f5)
 
-        printf '{"text":"%s %s","tooltip":"%s  %s\\nHumidity %s   Wind %s"}\n' \
+        printf '{"text":"%s %s","tooltip":"%s\\n%s  %s\\nHumidity %s   Wind %s"}\n' \
             "$(icon_for "$condition")" "$temperature" \
-            "$condition" "$temperature" "$humidity" "$wind"
+            "$place" "$condition" "$temperature" "$humidity" "$wind"
     else
         printf '{"text":"\356\214\223 --","tooltip":"Weather unavailable"}\n'
     fi
