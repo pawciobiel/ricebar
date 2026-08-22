@@ -201,9 +201,11 @@ fn tooltip_settings(bar: &Bar, index: usize, tooltip: &str) -> NewLayerShellSett
     // A tooltip is its own layer surface rather than an xdg popup. The runtime
     // creates popups with a grab, which is right for a menu but takes every
     // pointer event away from the bar underneath for as long as it is open.
+    let font_size = bar.config.bar.font_size;
     let width = (tooltip.chars().count() as f32)
-        .mul_add(TOOLTIP_GLYPH_WIDTH, 2.0 * TOOLTIP_PADDING)
+        .mul_add(font_size * TOOLTIP_GLYPH_RATIO, 2.0 * TOOLTIP_PADDING)
         .clamp(48.0, 720.0) as u32;
+    let height = font_size.mul_add(TOOLTIP_LINE_RATIO, 2.0 * TOOLTIP_PADDING) as u32;
 
     // Anchor under the module's own region. A layer surface anchored to
     // neither side is centred on that axis, and one anchored to a side cannot
@@ -233,7 +235,7 @@ fn tooltip_settings(bar: &Bar, index: usize, tooltip: &str) -> NewLayerShellSett
     };
 
     NewLayerShellSettings {
-        size: Some((width, TOOLTIP_HEIGHT)),
+        size: Some((width, height)),
         layer: Layer::Overlay,
         anchor: side.map_or(edge, |side| edge | side),
         exclusive_zone: Some(0),
@@ -247,10 +249,11 @@ fn tooltip_settings(bar: &Bar, index: usize, tooltip: &str) -> NewLayerShellSett
     }
 }
 
-const TOOLTIP_HEIGHT: u32 = 32;
-/// Deliberately an over-estimate: too wide leaves harmless empty space, while
-/// too narrow wraps the text and the popup clips it.
-const TOOLTIP_GLYPH_WIDTH: f32 = 9.5;
+/// Text cannot be measured outside a renderer, so a tooltip's surface is sized
+/// from the font size. Deliberately an over-estimate: too wide leaves harmless
+/// empty space, while too narrow wraps the text and the surface clips it.
+const TOOLTIP_GLYPH_RATIO: f32 = 0.6;
+const TOOLTIP_LINE_RATIO: f32 = 1.4;
 const TOOLTIP_PADDING: f32 = 10.0;
 
 fn popup_view<'a>(bar: &'a Bar, popup: &'a Popup) -> Element<'a, Message> {

@@ -28,6 +28,11 @@ pub struct Bar {
     pub spacing: f32,
     /// Gap between the modules and the edge of the bar.
     pub padding: f32,
+    /// Font family, as fontconfig knows it. Naming one that ships icon glyphs,
+    /// such as a Nerd Font, is what makes module icons render reliably rather
+    /// than by whatever the system happens to fall back to.
+    pub font: Option<String>,
+    pub font_size: f32,
     pub modules_left: Vec<String>,
     pub modules_center: Vec<String>,
     pub modules_right: Vec<String>,
@@ -43,6 +48,8 @@ impl Default for Bar {
             exclusive: true,
             spacing: 8.0,
             padding: 8.0,
+            font: None,
+            font_size: 16.0,
             modules_left: vec![String::from("workspaces")],
             modules_center: vec![String::from("clock")],
             modules_right: Vec::new(),

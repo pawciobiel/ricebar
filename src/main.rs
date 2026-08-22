@@ -3,6 +3,7 @@ mod compositor;
 mod config;
 mod modules;
 
+use iced::{Font, Pixels};
 use iced_layershell::build_pattern::daemon;
 use iced_layershell::reexport::{Anchor, KeyboardInteractivity, Layer};
 use iced_layershell::settings::{LayerShellSettings, Settings, StartMode};
@@ -32,6 +33,18 @@ fn main() -> Result<(), iced_layershell::Error> {
         0
     };
 
+    // `Font::with_name` holds a `&'static str`, and the family comes from a
+    // config file read at runtime. Leaking it is the honest way to bridge that:
+    // the font is chosen once and lives as long as the process.
+    let font = config
+        .bar
+        .font
+        .clone()
+        .map_or_else(Font::default, |family| {
+            Font::with_name(String::leak(family))
+        });
+    let font_size = Pixels(config.bar.font_size);
+
     daemon(
         move || app::Bar::new(config.clone()),
         app::namespace,
@@ -54,6 +67,8 @@ fn main() -> Result<(), iced_layershell::Error> {
             start_mode: StartMode::AllScreens,
             ..Default::default()
         },
+        default_font: font,
+        default_text_size: font_size,
         ..Default::default()
     })
     .run()

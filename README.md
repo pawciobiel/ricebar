@@ -33,6 +33,8 @@ A module runs only if it is named in one of the `modules-*` lists, so removing
 position = "top"          # top | bottom
 height = 32
 margin = [0, 0, 0, 0]     # top, right, bottom, left
+font = "JetBrainsMono Nerd Font"   # omit for the system default
+font-size = 16
 modules-left = ["workspaces"]
 modules-center = ["clock"]
 modules-right = []
@@ -63,6 +65,11 @@ Hovering a module opens a tooltip on its own layer-shell surface, so it is not
 clipped by the bar's height. It is anchored under the module's region, which
 keeps it on screen. The clock shows a full date; a custom module can print a
 JSON object with `text` and `tooltip` to supply its own.
+
+That pairing is how a module shows an icon with the detail on hover: print a
+Nerd Font glyph as `text` and the numbers as `tooltip`, and set `font` to a
+family that carries icon glyphs. See `memory` in
+[`config.example.toml`](config.example.toml).
 
 Missing config is normal and uses defaults. A *broken* config is reported on
 stderr, naming the line and the valid field names, and then falls back to

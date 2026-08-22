@@ -11,6 +11,12 @@ exclusive = true          # reserve the space so windows cannot cover the bar
 spacing = 8               # gap between modules
 padding = 8               # gap between modules and the bar's edge
 
+# Font family as fontconfig names it, e.g. `fc-list : family`. Leave it unset
+# to use the system default. Name a Nerd Font if any module shows icon glyphs,
+# otherwise they render only if the system happens to fall back to one.
+font = "JetBrainsMono Nerd Font"
+font-size = 16
+
 modules-left = ["workspaces"]
 modules-center = ["clock"]
 modules-right = ["memory"]
@@ -40,9 +46,13 @@ show-empty = true
 # A command may print plain text, or a JSON object with "text" and an optional
 # "tooltip". Anything that fails prints "!" with the reason in its tooltip.
 
+# Shows an icon, with the numbers on hover -- the same split waybar makes with
+# "format" and "tooltip-format". \357\203\211 is UTF-8 for U+F0C9, the Nerd
+# Font memory glyph, written as octal so this file stays plain ASCII. It needs
+# `font` above to name a font that carries icon glyphs.
 [[module.custom]]
 name = "memory"
-exec = '''free -m | awk '/^Mem:/ {printf "{\"text\":\"%.0f%%\",\"tooltip\":\"%d MiB of %d MiB used\"}", $3/$2*100, $3, $2}' '''
+exec = '''free -m | awk '/^Mem:/ {printf "{\"text\":\"\357\203\211\",\"tooltip\":\"%.0f%% - %d MiB of %d MiB used\"}", $3/$2*100, $3, $2}' '''
 interval = 5
 
 # The simplest possible form: plain text, with a fixed tooltip.
