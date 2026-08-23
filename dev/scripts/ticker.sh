@@ -31,9 +31,15 @@ collect() {
 
     disk_part=$(df -h / 2>/dev/null | awk 'NR==2 {printf "root %s of %s", $3, $2}')
 
-    # busybox ps takes no sort flags, so the busiest processes come from top.
-    top_part=$(top -bn1 2>/dev/null |
-        awk 'NR>4 && NR<8 {name=$9; sub(".*/", "", name); printf "%s%s %s", (NR>5 ? " " : ""), name, $8}')
+    # busybox ps takes no sort flags, so the busiest processes come from top,
+    # whose last column is the command and the one before it the CPU share.
+    top_part=$(top -bn1 2>/dev/null | awk '
+        NR > 4 && shown < 3 {
+            name = $9
+            if (name ~ /^\[/) next        # kernel threads are not interesting
+            sub(/.*\//, "", name)         # the program, not the path to it
+            printf "%s%s %s", (shown++ ? " " : ""), name, $8
+        }')
 
     mem_part=$(free -m 2>/dev/null |
         awk '/^Mem:/ {printf "mem %d of %d MiB", $3, $2}')

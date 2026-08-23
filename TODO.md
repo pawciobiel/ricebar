@@ -252,7 +252,7 @@ bar or hand it an absurd surface to draw.
       | `volume.sh`        | `pactl` (PipeWire or PulseAudio)       |
       | `network.sh`       | `ip`, `iw`                             |
       | `weather.sh`       | `curl`, and the network                |
-      | `ticker.sh`        | `curl`, `jq`                           |
+      | `ticker.sh`        | `top`, `df`, `free`                    |
       | `stocks.sh`        | `curl`, `python3`                      |
       | `windows-popup.sh` | `python3`, and a compositor CLI        |
 
