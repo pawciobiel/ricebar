@@ -27,7 +27,24 @@ config, a Rust module API, and a script escape hatch for everything else.
 ## Configuration
 
 `$XDG_CONFIG_HOME/ricebar/config.toml`, or `~/.config/ricebar/config.toml`.
-See [`config.example.toml`](config.example.toml) for every option.
+
+The first run writes one, together with the example scripts it refers to, and
+says where both went. What it enables depends on the machine: `PATH` decides
+whether the launcher and the volume module are on, and an actual sensor read
+decides whether the battery is, so a desktop does not get a battery module that
+can only ever fail. Anything left out is written commented out with the reason
+beside it, which is also the instruction for turning it on later:
+
+```toml
+modules-right = [
+    "weather",
+    # "volume",  # needs pactl
+    "cpu",
+]
+```
+
+See [`config.example.toml`](config.example.toml) for every option, and
+[`config.default.toml`](config.default.toml) for what a first run writes.
 
 A module runs only if it is named in one of the `modules-*` lists, so removing
 `"clock"` from `modules-center` removes the clock.

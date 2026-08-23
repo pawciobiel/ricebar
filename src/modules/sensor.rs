@@ -363,6 +363,20 @@ fn temperature() -> Option<Reading> {
     })
 }
 
+/// Whether this machine can produce a reading at all.
+///
+/// Used when writing the first-run config: a desktop has no battery, and a
+/// module that could only ever show a warning triangle is worse than one that
+/// is not there.
+pub fn available(kind: Kind) -> bool {
+    match kind {
+        Kind::Cpu | Kind::Memory => true,
+        Kind::Temperature => temperature().is_some(),
+        Kind::Battery => battery().is_some(),
+        Kind::Backlight => backlight().is_some(),
+    }
+}
+
 /// Prefer a named hwmon sensor over the ACPI zone, which is often the case.
 fn thermal_source() -> Option<PathBuf> {
     let hwmon = fs::read_dir("/sys/class/hwmon")

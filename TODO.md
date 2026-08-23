@@ -226,49 +226,47 @@ bar or hand it an absurd surface to draw.
       `Message::NewLayerShell` mints them on demand — so this is a question of
       config shape and of `view` knowing which bar a `window::Id` belongs to,
       the same lookup per-monitor bars need.
-- [ ] **Write a default config on first run.** Starting with no config leaves
-      no trace of what could be configured; the bar comes up on defaults and
-      the user has to find the example. Create the directory and write a
-      commented default the first time, then say where it went. Never
-      overwrite an existing one, and keep working if the directory cannot be
-      created. Goes together with *(shipping the example scripts)*, since what
-      that default enables depends on what is installed alongside it.
+- [x] **Write a default config on first run.** Done, in
+      `src/config/first_run.rs`. A missing config at the default location is
+      taken as a first run: the directory is created, `config.default.toml` is
+      written with the example scripts beside it, and both paths are reported.
+      A path named with `--config` is still an error rather than a first run,
+      an existing file is never overwritten, and a directory that cannot be
+      created falls back to built-in defaults with the bar still coming up.
 
 ## Packaging
 
-- [ ] **Ship the example scripts, and start with them.** `dev/scripts/` is
-      where the bar's range actually shows: streaming, popups, tickers, icons
-      chosen from a reported value. A first run on bare defaults shows a clock
-      and some workspaces, which is not what the thing does.
+- [x] **Ship the example scripts, and start with them.** Done. The scripts are
+      `include_str!`-ed into the binary and written next to the config on first
+      run, which means `cargo install ricebar` carries them with no data
+      directory for a package to own and no install step to get wrong. They are
+      written only if absent, so editing one and deleting the config to start
+      again keeps the edits.
 
-      Install them somewhere a package can own — `/usr/share/ricebar/scripts/`
-      — and have the first-run config copy or reference them, alongside
-      *(writing a default config on first run)*.
-
-      The tension worth getting right: a fresh install that shows its range,
-      without a fresh install full of warning triangles. Each script needs
-      something not everyone has:
+      The tension was a fresh install that shows the bar's range without
+      filling it with warning triangles, since each script needs something not
+      everyone has:
 
       | script             | needs                                  |
       |--------------------|----------------------------------------|
       | `volume.sh`        | `pactl` (PipeWire or PulseAudio)       |
       | `network.sh`       | `ip`, `iw`                             |
       | `weather.sh`       | `curl`, and the network                |
-      | `ticker.sh`        | `top`, `df`, `free`                    |
+      | `ticker.sh`        | `curl`, `jq`                           |
       | `stocks.sh`        | `curl`, `python3`                      |
       | `windows-popup.sh` | `python3`, and a compositor CLI        |
 
-      So the default config should enable the ones whose dependencies are
-      present and leave the rest commented with a line saying what they want.
-      None of them needs an API key any more: `stocks.sh` reports indices and
-      zloty rates out of the box, from Yahoo and the Polish central bank, and
-      only individual company quotes want a finnhub key. Those are off unless
-      `SYMBOLS` is set, so a fresh install shows markets rather than a module
-      complaining about a key nobody asked for.
+      Settled by writing the `modules-*` lists from what the machine has:
+      `PATH` for programs, an actual sensor read for hardware, so a desktop
+      gets no battery module. Anything unusable is written commented out with
+      the reason beside it — `# "volume",  # needs pactl` — which answers the
+      objection that first-run detection bakes in whatever was installed that
+      day. Installing the missing piece leaves a line saying what to uncomment,
+      rather than a module that silently never appeared.
 
-      Deciding what is present is itself a question — checking at first-run
-      only bakes in whatever was installed that day, so it may be better for
-      a module to say what it is missing than for the config to guess.
+      Not everything is enabled even where it works: the ticker and the markets
+      want a second row, and the power menu really does power the machine off,
+      so those ship commented with an explanation instead.
 
 - [ ] **Publish to crates.io.** The name is free. Needs a real README badge set,
       a licence header check and a `cargo publish --dry-run`.

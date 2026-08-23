@@ -1,6 +1,7 @@
 //! Configuration, read from `$XDG_CONFIG_HOME/ricebar/config.toml`.
 
 mod color;
+mod first_run;
 
 pub use color::Rgba;
 
@@ -435,13 +436,21 @@ pub fn load(named: Option<PathBuf>) -> Config {
 
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            // Missing is unremarkable at the default location, but a path
-            // asked for by name and not there is a mistake worth saying twice.
-            if explicit {
-                eprintln!("ricebar: {} does not exist", path.display());
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound && !explicit => {
+            // First run. Coming up on built-in defaults would leave no trace of
+            // what can be configured, so write a starter config and read that.
+            match first_run::create(&path).and_then(|()| std::fs::read_to_string(&path)) {
+                Ok(text) => text,
+                Err(error) => {
+                    eprintln!("ricebar: cannot write {}: {error}", path.display());
+                    eprintln!("ricebar: using defaults");
+                    return Config::default();
+                }
             }
-            eprintln!("ricebar: no config at {}, using defaults", path.display());
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            // Asked for by name and not there is a mistake, not a first run.
+            eprintln!("ricebar: {} does not exist, using defaults", path.display());
             return Config::default();
         }
         Err(error) => {

@@ -7,6 +7,11 @@ license = "MIT"
 repository = "https://github.com/pawciobiel/ricebar"
 keywords = ["wayland", "statusbar", "layer-shell", "iced", "hyprland"]
 categories = ["gui"]
+readme = "README.md"
+# dev/scripts/ ships: the binary embeds it and writes it out on first run.
+# The rest of dev/ is for working on ricebar, and docs/ holds the README's
+# recordings, which have no business in a crate.
+exclude = ["/docs", "/dev/*.conf", "/dev/*.kdl"]
 
 [dependencies]
 iced = { version = "0.14", features = ["tokio"] }

@@ -1,0 +1,191 @@
+# ricebar — written on first run. Edit freely; ricebar never rewrites it.
+#
+# Every option is documented in config.example.toml, shipped with the source.
+#
+# A module runs only if it is named in one of the modules-* lists below, so
+# deleting "clock" from modules-center removes the clock. The lists were filled
+# in from what this machine actually had when the file was written: anything
+# commented out is missing a program or a piece of hardware, and saying so is
+# more useful than a row of warning triangles.
+
+[bar]
+position = "top"
+height = 32
+spacing = 8
+padding = 8
+vertical-align = "center"
+
+# Name a Nerd Font or the icons below render as empty boxes. Check yours with
+# `fc-list : family | grep -i nerd`, and pick another with `fc-match "<name>"`.
+font = "JetBrainsMono Nerd Font"
+font-size = 16
+
+# @MODULES@
+
+[bar.style]
+# #rgb, #rgba, #rrggbb and #rrggbbaa all work.
+background = "#1e1e2e"
+foreground = "#cdd6f4"
+accent = "#89b4fa"        # fill behind the focused item
+muted = "#45475a"         # fill behind an active but unfocused item
+dim = "#6c7086"           # text of an empty item
+urgent = "#f38ba8"        # wants attention, e.g. today in the calendar
+border-color = "#89b4fa"
+border-width = 0
+border-radius = 0
+
+# --- built-in modules ---------------------------------------------------
+
+[module.clock]
+format = "%Y-%m-%d %H:%M:%S"
+interval = 1
+tooltip-format = "%A, %-d %B %Y"   # what hovering shows
+calendar = true                    # what clicking opens
+week-numbers = true
+weeks-pos = "right"
+start-monday = true
+# Run when a day is clicked; {} becomes the date as 2026-08-23, already quoted.
+# Point it at a calendar, a script, anything: the notification is only a
+# placeholder that makes the feature obvious.
+on-click-day = "notify-send ricebar {}"
+
+[module.workspaces]
+show-empty = true
+# auto | hyprland | sway | niri | none. `auto` reads the environment, which is
+# ambiguous in a nested session — name one to settle it.
+compositor = "auto"
+
+# {icon} and {value}; drop {value} for an icon on its own. `colors` picks the
+# text colour by level, lowest first, the same way `icons` picks the glyph.
+[module.cpu]
+format = "{icon} {value}"
+colors = ["#a6e3a1", "#f9e2af", "#f38ba8"]
+interval = 2
+background = "#313244"
+
+[module.memory]
+format = "{icon} {value}"
+colors = ["#a6e3a1", "#f9e2af", "#f38ba8"]
+interval = 5
+background = "#313244"
+
+[module.temperature]
+format = "{icon} {value}"
+interval = 5
+background = "#313244"
+foreground = "#f9e2af"
+
+[module.battery]
+format = "{icon} {value}"
+interval = 10
+background = "#313244"
+foreground = "#a6e3a1"
+
+[module.backlight]
+format = "{icon} {value}"
+interval = 5
+background = "#313244"
+# Turn the wheel over the module to change it. brightnessctl needs either the
+# video group or its setuid helper.
+on-scroll-up = "brightnessctl set +5%"
+on-scroll-down = "brightnessctl set 5%-"
+
+# --- script modules -----------------------------------------------------
+#
+# A custom module is up to three scripts: `exec` for what it shows, `tooltip`
+# for hover, `on-click` for a click. Any may be left out. These were copied to
+# @SCRIPTS@ on first run, and are yours to edit.
+
+# No `exec` at all — a label and an action, which is how you get a start-menu
+# button. rofi is told where to appear so it opens under the button.
+[[module.custom]]
+name = "launcher"
+label = "\uf009"
+tooltip = "Applications"
+on-click = "rofi -show drun -location 1 -yoffset 32 -xoffset 4"
+
+# A popup built by a script: it prints a JSON list of labels and commands, and
+# ricebar draws it on its own layer-shell surface. This one lists open windows
+# and works out the compositor by itself.
+[[module.custom]]
+name = "windows"
+label = "\uf2d2"
+tooltip = "Open windows"
+popup = "@SCRIPTS@/windows-popup.sh"
+
+# `stream = true` keeps the command running and reads a line each time it
+# prints, rather than re-running it on a timer. This one blocks inside
+# `pactl subscribe`, so an idle machine costs nothing at all. The script
+# reports a percentage and `icons` turns it into a glyph, so the look stays
+# here in the config rather than in the script.
+[[module.custom]]
+name = "volume"
+exec = "@SCRIPTS@/volume.sh"
+stream = true
+icons = ["\uf026", "\uf027", "\uf028"]
+format = "{icon} {value}"
+on-click = "pavucontrol"
+on-scroll-up = "pactl set-sink-volume @DEFAULT_SINK@ +5%"
+on-scroll-down = "pactl set-sink-volume @DEFAULT_SINK@ -5%"
+background = "#313244"
+
+# Also streamed: the script sleeps between fetches, so ricebar starts one
+# process instead of forking every interval. Without LOCATION, wttr.in guesses
+# from your IP address, which tends to mean wherever your ISP terminates it —
+# set it to a real place: LOCATION='Lublin,Poland'
+[[module.custom]]
+name = "weather"
+exec = "@SCRIPTS@/weather.sh"
+stream = true
+tooltip = "Fetching weather..."
+
+# --- not enabled by default ---------------------------------------------
+
+# A ticker. Content wider than `scroll-width` characters scrolls past a window
+# of that width. A second row is where something too wide for a status bar
+# belongs — uncomment this and the [[bar.row]] pair above it to use it.
+#
+# [[module.custom]]
+# name = "ticker"
+# exec = "@SCRIPTS@/ticker.sh"
+# stream = true
+# scroll-width = 46
+# scroll-speed = 6
+
+# Markets: stock indices from Yahoo and zloty rates from the Polish central
+# bank, neither of which needs an API key. Individual company quotes come from
+# finnhub, which does:
+#
+#   printf '%s\n' 'YOUR_KEY' > ~/.config/ricebar/finnhub.token
+#   chmod 600 ~/.config/ricebar/finnhub.token
+#
+# then set SYMBOLS below. See the header of the script for the rest.
+#
+# [[module.custom]]
+# name = "stocks"
+# exec = "FX='USD EUR' @SCRIPTS@/stocks.sh"
+# stream = true
+# scroll-width = 46
+# scroll-speed = 6
+
+# Network: link state, SSID and address, from iproute2 and iw.
+#
+# [[module.custom]]
+# name = "network"
+# exec = "@SCRIPTS@/network.sh"
+# interval = 5
+
+# A menu shows a label and opens a list of commands when clicked. This one is
+# left out of modules-right on purpose: the entries below really do power the
+# machine off, and the right commands depend on your init system and lock
+# screen. Check them, then add "power" to a modules-* list.
+#
+# [[module.menu]]
+# name = "power"
+# label = "⏻"
+# items = [
+#     { label = "\U000F033E  Lock", exec = "hyprlock" },
+#     { label = "\U000F04B2  Suspend", exec = "loginctl suspend" },
+#     { label = "\U000F0709  Reboot", exec = "reboot" },
+#     { label = "\U000F0425  Shutdown", exec = "poweroff" },
+# ]
