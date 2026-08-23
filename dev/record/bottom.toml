@@ -1,0 +1,53 @@
+# The bottom bar in the README's recordings: a second ricebar process, in
+# Gruvbox rather than Mocha, floating on a margin with rounded corners. A bar
+# anchors to one edge, so a second edge means a second process.
+
+[bar]
+position = "bottom"
+height = 28
+margin = [0, 14, 10, 14]
+spacing = 10
+padding = 12
+vertical-align = "center"
+font = "JetBrainsMono Nerd Font"
+font-size = 14
+
+modules-left = ["network"]
+modules-center = ["stocks"]
+modules-right = ["backlight", "disk"]
+
+[bar.style]
+background = "#282828e6"
+foreground = "#ebdbb2"
+accent = "#d79921"
+muted = "#504945"
+dim = "#928374"
+urgent = "#cc241d"
+border-color = "#d79921"
+border-width = 1
+border-radius = 10
+
+[module.backlight]
+format = "{icon} {value}"
+interval = 5
+foreground = "#fabd2f"
+on-scroll-up = "brightnessctl set +5%"
+on-scroll-down = "brightnessctl set 5%-"
+
+[[module.custom]]
+name = "network"
+exec = "dev/scripts/network.sh"
+stream = true
+
+[[module.custom]]
+name = "stocks"
+exec = "FX='USD EUR' dev/scripts/stocks.sh"
+stream = true
+scroll-width = 42
+scroll-speed = 5
+
+[[module.custom]]
+name = "disk"
+exec = "df -h / | awk 'NR == 2 {print $4\" free\"}'"
+interval = 60
+tooltip = "Space left on /"

@@ -1,0 +1,128 @@
+# The top bar in the README's recordings: two rows, Catppuccin Mocha, the
+# palette the first-run config ships with. Run by dev/record/record.sh, from
+# the repository root -- the script paths below are relative to it.
+
+[bar]
+position = "top"
+height = 30
+spacing = 8
+padding = 10
+vertical-align = "center"
+font = "JetBrainsMono Nerd Font"
+font-size = 15
+
+[[bar.row]]
+modules-left = ["launcher", "windows", "workspaces"]
+modules-center = ["clock"]
+modules-right = ["volume", "cpu", "memory", "temperature", "battery", "power"]
+
+[[bar.row]]
+height = 24
+modules-left = ["weather"]
+modules-center = ["ticker"]
+modules-right = ["kernel"]
+
+[bar.style]
+background = "#1e1e2e"
+foreground = "#cdd6f4"
+accent = "#89b4fa"
+muted = "#45475a"
+dim = "#6c7086"
+urgent = "#f38ba8"
+border-color = "#89b4fa"
+border-width = 0
+border-radius = 0
+
+[module.clock]
+format = "%A %-d %B   %H:%M"
+interval = 1
+tooltip-format = "%A, %-d %B %Y"
+calendar = true
+week-numbers = true
+weeks-pos = "right"
+start-monday = true
+on-click-day = "notify-send ricebar {}"
+
+[module.workspaces]
+show-empty = true
+# `auto` cannot tell a nested session apart: sway started inside Hyprland
+# inherits HYPRLAND_INSTANCE_SIGNATURE, so both look present.
+compositor = "sway"
+
+[module.cpu]
+format = "{icon} {value}"
+colors = ["#a6e3a1", "#f9e2af", "#f38ba8"]
+interval = 2
+background = "#313244"
+
+[module.memory]
+format = "{icon} {value}"
+colors = ["#a6e3a1", "#f9e2af", "#f38ba8"]
+interval = 5
+background = "#313244"
+
+[module.temperature]
+format = "{icon} {value}"
+interval = 5
+background = "#313244"
+foreground = "#f9e2af"
+
+[module.battery]
+format = "{icon} {value}"
+interval = 10
+background = "#313244"
+foreground = "#a6e3a1"
+
+[[module.custom]]
+name = "launcher"
+label = ""
+tooltip = "Applications"
+on-click = "rofi -show drun -location 1 -yoffset 54 -xoffset 6"
+
+[[module.custom]]
+name = "windows"
+label = ""
+tooltip = "Open windows"
+popup = "dev/scripts/windows-popup.sh"
+
+[[module.custom]]
+name = "volume"
+exec = "dev/scripts/volume.sh"
+stream = true
+icons = ["", "", ""]
+format = "{icon} {value}"
+on-click = "pavucontrol"
+on-scroll-up = "pactl set-sink-volume @DEFAULT_SINK@ +5%"
+on-scroll-down = "pactl set-sink-volume @DEFAULT_SINK@ -5%"
+background = "#313244"
+
+[[module.custom]]
+name = "weather"
+exec = "LOCATION='Warsaw,Poland' dev/scripts/weather.sh"
+stream = true
+tooltip = "Fetching weather..."
+
+[[module.custom]]
+name = "ticker"
+exec = "dev/scripts/ticker.sh"
+stream = true
+scroll-width = 44
+scroll-speed = 6
+
+[[module.custom]]
+name = "kernel"
+exec = "uname -r"
+interval = 3600
+tooltip = "Running kernel"
+
+# Nothing here powers anything off: a recording should not depend on the
+# machine surviving a mistimed click.
+[[module.menu]]
+name = "power"
+label = "⏻"
+items = [
+    { label = "\U000F033E  Lock", exec = "true" },
+    { label = "\U000F04B2  Suspend", exec = "true" },
+    { label = "\U000F0709  Reboot", exec = "true" },
+    { label = "\U000F0425  Shutdown", exec = "true" },
+]
