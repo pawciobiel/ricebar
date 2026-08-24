@@ -34,7 +34,7 @@ font-size = 16
 [[bar.row]]
 modules-left = ["launcher", "windows", "workspaces"]
 modules-center = ["clock"]
-modules-right = ["volume", "cpu", "memory", "temperature", "backlight", "battery", "power"]
+modules-right = ["volume", "microphone", "cpu", "memory", "temperature", "backlight", "battery", "power"]
 
 [[bar.row]]
 height = 24
@@ -121,6 +121,23 @@ format = "{icon} {value}"
 on-click = "pavucontrol"
 on-scroll-up = "pactl set-sink-volume @DEFAULT_SINK@ +5%"
 on-scroll-down = "pactl set-sink-volume @DEFAULT_SINK@ -5%"
+background = "#313244"
+
+# The microphone. Unlike volume above, this one picks its own glyph instead of
+# taking one from `icons` -- muted is not a level, and an `icons` list is
+# indexed by percentage, so a quiet microphone would be drawn as a muted one.
+# Both glyphs can still be changed, from the command rather than the config:
+#
+#   exec = "ON='(o)' OFF='(x)' ~/.config/ricebar/scripts/microphone.sh"
+#
+# Copy dev/scripts/microphone.sh to ~/.config/ricebar/scripts/ first.
+[[module.custom]]
+name = "microphone"
+exec = "~/.config/ricebar/scripts/microphone.sh"
+stream = true
+on-click = "pactl set-source-mute @DEFAULT_SOURCE@ toggle"
+on-scroll-up = "pactl set-source-volume @DEFAULT_SOURCE@ +5%"
+on-scroll-down = "pactl set-source-volume @DEFAULT_SOURCE@ -5%"
 background = "#313244"
 
 # Weather, streamed: the script sleeps between fetches and prints a line each

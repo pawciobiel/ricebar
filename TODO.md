@@ -114,6 +114,15 @@ state a script cannot see.
       changes the brightness.
 - [x] **pulseaudio** — done as `dev/scripts/volume.sh`, streaming, with scroll
       to change and a click to `pavucontrol`.
+- [x] **microphone** — done as `dev/scripts/microphone.sh`, streaming, with a
+      click to toggle mute and scroll to change the recording level. The
+      tooltip names the capture device.
+
+      This one chooses its own glyph — `U+F130`, or `U+F131` crossed out when
+      muted — rather than taking one from the module's `icons`. That list is
+      indexed by percentage, and muted is not a level: a microphone turned
+      down to 20% would otherwise be drawn as a muted one. Both glyphs stay
+      overridable, through `ON` and `OFF` in the command.
 - [ ] *(original note)* pulseaudio — `U+F026` `U+F027` `U+F028` by volume, `U+F131` muted,
       plus per-device icons (headphone `U+F025`, headset `U+F590`,
       phone `U+F095`, portable `U+F10B`, car `U+F1B9`). Scroll to change,
@@ -250,6 +259,7 @@ bar or hand it an absurd surface to draw.
       | script             | needs                                  |
       |--------------------|----------------------------------------|
       | `volume.sh`        | `pactl` (PipeWire or PulseAudio)       |
+      | `microphone.sh`    | `pactl` (PipeWire or PulseAudio)       |
       | `network.sh`       | `ip`, `iw`                             |
       | `weather.sh`       | `curl`, and the network                |
       | `ticker.sh`        | `top`, `df`, `free`                    |

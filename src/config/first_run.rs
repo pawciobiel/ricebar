@@ -21,6 +21,10 @@ const MODULES: &str = "# @MODULES@";
 const SCRIPTS_DIR: &str = "@SCRIPTS@";
 
 const SCRIPTS: &[(&str, &str)] = &[
+    (
+        "microphone.sh",
+        include_str!("../../dev/scripts/microphone.sh"),
+    ),
     ("network.sh", include_str!("../../dev/scripts/network.sh")),
     ("stocks.sh", include_str!("../../dev/scripts/stocks.sh")),
     ("ticker.sh", include_str!("../../dev/scripts/ticker.sh")),
@@ -77,6 +81,10 @@ const RIGHT: &[Offered] = &[
     },
     Offered {
         name: "volume",
+        needs: &[Need::Program("pactl")],
+    },
+    Offered {
+        name: "microphone",
         needs: &[Need::Program("pactl")],
     },
     Offered {

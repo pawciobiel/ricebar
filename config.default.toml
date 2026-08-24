@@ -129,6 +129,19 @@ on-scroll-up = "pactl set-sink-volume @DEFAULT_SINK@ +5%"
 on-scroll-down = "pactl set-sink-volume @DEFAULT_SINK@ -5%"
 background = "#313244"
 
+# The microphone, streamed the same way. This one picks its own glyph rather
+# than taking one from `icons`, because muted is not a level: an `icons` list is
+# indexed by percentage, so a quiet microphone would be drawn as a muted one.
+# Clicking toggles mute, and the wheel changes the recording level.
+[[module.custom]]
+name = "microphone"
+exec = "@SCRIPTS@/microphone.sh"
+stream = true
+on-click = "pactl set-source-mute @DEFAULT_SOURCE@ toggle"
+on-scroll-up = "pactl set-source-volume @DEFAULT_SOURCE@ +5%"
+on-scroll-down = "pactl set-source-volume @DEFAULT_SOURCE@ -5%"
+background = "#313244"
+
 # Also streamed: the script sleeps between fetches, so ricebar starts one
 # process instead of forking every interval. Without LOCATION, wttr.in guesses
 # from your IP address, which tends to mean wherever your ISP terminates it —
