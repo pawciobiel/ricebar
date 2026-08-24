@@ -72,8 +72,8 @@ const SCRIPTS: &[(&str, &str)] = &[
     ("volume.sh", include_str!("../../dev/scripts/volume.sh")),
     ("weather.sh", include_str!("../../dev/scripts/weather.sh")),
     (
-        "windows-popup.sh",
-        include_str!("../../dev/scripts/windows-popup.sh"),
+        "windows-popup.py",
+        include_str!("../../dev/scripts/windows-popup.py"),
     ),
 ];
 

@@ -160,12 +160,12 @@ tooltip = "Fetching weather..."
 # about what is in the list -- this one happens to be open windows, and the
 # script works out which compositor is running by itself.
 #
-# Copy dev/scripts/windows-popup.sh to ~/.config/ricebar/scripts/ first.
+# Copy dev/scripts/windows-popup.py to ~/.config/ricebar/scripts/ first.
 [[module.custom]]
 name = "windows"
 label = "\uf2d2"
 tooltip = "Open windows"
-popup = "~/.config/ricebar/scripts/windows-popup.sh"
+popup = "~/.config/ricebar/scripts/windows-popup.py"
 
 # Markets. Indices and zloty rates need no key at all, so this works as it
 # stands. Individual company quotes come from finnhub, which does need one:

@@ -85,7 +85,7 @@ on-click = "rofi -show drun -location 1 -yoffset 54 -xoffset 6"
 name = "windows"
 label = ""
 tooltip = "Open windows"
-popup = "dev/scripts/windows-popup.sh"
+popup = "dev/scripts/windows-popup.py"
 
 [[module.custom]]
 name = "volume"

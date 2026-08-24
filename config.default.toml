@@ -142,7 +142,7 @@ on-click = "rofi -show drun -location 1 -yoffset 32 -xoffset 4"
 name = "windows"
 label = "\uf2d2"
 tooltip = "Open windows"
-popup = "@SCRIPTS@/windows-popup.sh"
+popup = "@SCRIPTS@/windows-popup.py"
 
 # `stream = true` keeps the command running and reads a line each time it
 # prints, rather than re-running it on a timer. This one blocks inside

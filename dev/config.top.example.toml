@@ -102,7 +102,7 @@ on-click = "~/.config/hypr/scripts/show_key_bindings.sh"
 name = "windows"
 label = ""
 tooltip = "Open windows"
-popup = "~/.config/ricebar/scripts/windows-popup.sh"
+popup = "~/.config/ricebar/scripts/windows-popup.py"
 
 [[module.custom]]
 name = "network"

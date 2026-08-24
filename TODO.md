@@ -281,7 +281,7 @@ bar or hand it an absurd surface to draw.
       | `weather.sh`       | `curl`, and the network                |
       | `ticker.sh`        | `top`, `df`, `free`                    |
       | `stocks.sh`        | `curl`, `python3`                      |
-      | `windows-popup.sh` | `python3`, and a compositor CLI        |
+      | `windows-popup.py` | `python3`, and a compositor CLI        |
 
       Settled by writing the `modules-*` lists from what the machine has:
       `PATH` for programs, an actual sensor read for hardware, so a desktop
