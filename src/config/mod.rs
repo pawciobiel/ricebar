@@ -5,7 +5,7 @@ mod first_run;
 
 pub use color::Rgba;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
@@ -18,6 +18,15 @@ pub struct Config {
     /// [`trustworthy`]. Not a config key; decided when the file is read.
     #[serde(skip, default = "yes")]
     pub trusted: bool,
+    /// Where this was read from, so the bar can watch it for changes. Not a
+    /// config key. `None` when there is nowhere to read one from at all.
+    #[serde(skip)]
+    pub path: Option<PathBuf>,
+    /// Why this is the built-in default rather than what the file says. Not a
+    /// config key; set when a config was found but could not be used, so the
+    /// bar can say so where it will be seen.
+    #[serde(skip)]
+    pub problem: Option<String>,
 }
 
 fn yes() -> bool {
@@ -472,18 +481,76 @@ pub fn load(named: Option<PathBuf>) -> Config {
         }
     };
 
-    match toml::from_str::<Config>(&text) {
-        Ok(mut config) => {
+    match parse(&path, &text) {
+        Ok(config) => {
             eprintln!("ricebar: loaded {}", path.display());
-            config.trusted = trustworthy(&path);
             config
         }
-        Err(error) => {
+        Err(problem) => {
             eprintln!("ricebar: {} is invalid, using defaults:", path.display());
-            eprintln!("{error}");
-            Config::default()
+            eprintln!("{problem}");
+
+            // Still remember the path. The bar watches it, so fixing the file
+            // is enough to get the real config without restarting anything.
+            Config {
+                path: Some(path),
+                problem: Some(problem),
+                ..Config::default()
+            }
         }
     }
+}
+
+/// Parse one config file, having already read it.
+///
+/// Split out from [`load`] so a running bar can re-read the same path without
+/// the first-run and fall-back-to-defaults behaviour that only makes sense at
+/// startup.
+pub fn parse(path: &Path, text: &str) -> Result<Config, String> {
+    let mut config: Config = toml::from_str(text).map_err(|error| error.to_string())?;
+
+    config.trusted = trustworthy(path);
+    config.path = Some(path.to_path_buf());
+    Ok(config)
+}
+
+/// Read and parse a config file that is already known to exist.
+pub fn reread(path: &Path) -> Result<Config, String> {
+    let text = std::fs::read_to_string(path)
+        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+
+    parse(path, &text)
+}
+
+/// Which settings differ that cannot be changed on a running bar.
+///
+/// The layer surface's size, position and margin are settled when it is
+/// created, and the default font is chosen once for the process. A reload that
+/// alters one of them cannot be applied, and applying the rest would leave the
+/// bar drawing something its surface is the wrong shape for.
+pub fn fixed_differences(current: &Config, next: &Config) -> Vec<&'static str> {
+    let mut changed = Vec::new();
+
+    if current.bar.position != next.bar.position {
+        changed.push("position");
+    }
+    if current.bar.margin != next.bar.margin {
+        changed.push("margin");
+    }
+    if current.bar.exclusive != next.bar.exclusive {
+        changed.push("exclusive");
+    }
+    if current.bar.total_height() != next.bar.total_height() {
+        changed.push("height");
+    }
+    if current.bar.font != next.bar.font {
+        changed.push("font");
+    }
+    if current.bar.font_size != next.bar.font_size {
+        changed.push("font-size");
+    }
+
+    changed
 }
 
 /// Whether shell commands in this config may be run.

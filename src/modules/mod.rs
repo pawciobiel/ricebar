@@ -7,6 +7,7 @@ pub mod clock;
 pub mod custom;
 pub mod icon;
 pub mod menu;
+pub mod notice;
 pub mod sensor;
 pub mod workspaces;
 

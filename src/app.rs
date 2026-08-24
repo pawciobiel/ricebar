@@ -1,6 +1,8 @@
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant, SystemTime};
 
+use iced::futures::{SinkExt, Stream};
 use iced::widget::{column, container, mouse_area, row, space, text};
 use iced::{Alignment, Border, Color, Element, Length, Subscription, Task, window};
 use iced_layershell::reexport::{
@@ -29,6 +31,12 @@ pub struct Bar {
     /// A popup we have asked to remove. Its surface may still ask to be drawn
     /// once more, and it must not fall through to rendering the whole bar.
     retiring: Option<window::Id>,
+    /// Where the warning about the config sits in `modules`, once there is one.
+    notice: Option<usize>,
+    /// How many times the config has been reloaded. Part of every
+    /// subscription's identity, so a reload restarts the streams behind the
+    /// new modules rather than leaving them attached to the old ones.
+    generation: u64,
 }
 
 /// One line of the bar, holding indices into `modules`.
@@ -88,7 +96,7 @@ impl Bar {
             eprintln!("ricebar: {} module(s): {}", names.len(), names.join(", "));
         }
 
-        Self {
+        let mut bar = Self {
             config,
             modules,
             rows,
@@ -96,6 +104,40 @@ impl Bar {
             hovered: None,
             scrolled: HashMap::new(),
             retiring: None,
+            notice: None,
+            generation: 0,
+        };
+
+        // A config that could not be read is why this bar looks like the
+        // defaults, and that is worth saying where it will be seen.
+        if let Some(problem) = bar.config.problem.clone() {
+            bar.warn(problem);
+        }
+
+        bar
+    }
+
+    /// Show a warning about the bar's own configuration, in the bar.
+    ///
+    /// The detail goes to stderr as well, but a bar started by the compositor
+    /// has no terminal attached: without this, a mistake in the config is
+    /// invisible and saving the file simply appears to do nothing.
+    fn warn(&mut self, detail: String) {
+        let notice: Box<dyn Module> = Box::new(modules::notice::Notice::new(detail));
+
+        match self.notice.and_then(|index| self.modules.get_mut(index)) {
+            Some(existing) => *existing = notice,
+            None => {
+                let index = self.modules.len();
+                self.modules.push(notice);
+                self.notice = Some(index);
+
+                // The end of the first line, which is where the eye goes and
+                // where a bar of any shape has something visible.
+                if let Some(first) = self.rows.first_mut() {
+                    first.right.push(index);
+                }
+            }
         }
     }
 }
@@ -134,6 +176,8 @@ pub enum Message {
     /// The pointer scrolled over the module at this index, by however much it
     /// reports at a time.
     Scroll(usize, iced::mouse::ScrollDelta),
+    /// The config file was written to.
+    ConfigChanged,
 }
 
 /// How far a touchpad must travel to count as one notch of a wheel.
@@ -155,16 +199,132 @@ pub fn namespace() -> String {
 }
 
 pub fn subscription(bar: &Bar) -> Subscription<Message> {
-    Subscription::batch(bar.modules.iter().enumerate().map(|(index, module)| {
+    let generation = bar.generation;
+
+    let modules = Subscription::batch(bar.modules.iter().enumerate().map(|(index, module)| {
         // `with` folds the index into the subscription's identity. Without it
         // iced would hash only the *type* of the closure below, so two modules
         // sharing an inner recipe would collapse into a single stream and one
         // of them would never receive an event.
+        //
+        // The generation is in there for the same reason, one level up. A
+        // reload builds new modules, but iced recognises a subscription it is
+        // already running and keeps the old stream -- which has already sent
+        // its opening state, so the new module would sit empty waiting for a
+        // change. Workspaces stayed blank; a weather script would have been
+        // blank until its next print, a quarter of an hour later.
         module
             .subscription()
-            .with(index)
-            .map(|(index, event)| Message::Module(index, event))
-    }))
+            .with((generation, index))
+            .map(|((_, index), event)| Message::Module(index, event))
+    }));
+
+    let Some(path) = bar.config.path.clone() else {
+        return modules;
+    };
+
+    Subscription::batch([
+        modules,
+        Subscription::run_with(path, watch).map(|()| Message::ConfigChanged),
+    ])
+}
+
+/// How often the config is checked for changes. A `stat` costs almost nothing,
+/// and a second is soon enough to feel immediate after saving the file.
+const POLL: Duration = Duration::from_secs(1);
+
+/// Emit once each time the config file changes.
+///
+/// Polling rather than inotify: it needs no dependency, and it copes with the
+/// editors that save by writing a new file and renaming it over the old one,
+/// which a watch on the original inode would miss entirely.
+// `&Path` would be the idiomatic argument, but the subscription's key type is
+// what fixes this signature: `run_with` wants `Fn(&PathBuf)`, and a function
+// taking `&Path` does not coerce to it.
+#[allow(clippy::ptr_arg)]
+fn watch(path: &PathBuf) -> impl Stream<Item = ()> + use<> {
+    let path = path.clone();
+
+    iced::stream::channel(1, async move |mut output| {
+        let mut seen = stamp(&path);
+
+        loop {
+            tokio::time::sleep(POLL).await;
+
+            let found = stamp(&path);
+            if found == seen {
+                continue;
+            }
+            seen = found;
+
+            // A file that has just vanished is usually an editor partway
+            // through replacing it, and the write that follows is the change
+            // worth acting on.
+            if found.is_none() {
+                continue;
+            }
+
+            if output.send(()).await.is_err() {
+                return;
+            }
+        }
+    })
+}
+
+/// What identifies a version of the file: when it was written, and how long it
+/// is. Cheaper than reading it, and enough to notice a save.
+fn stamp(path: &Path) -> Option<(SystemTime, u64)> {
+    let found = std::fs::metadata(path).ok()?;
+    Some((found.modified().ok()?, found.len()))
+}
+
+/// Re-read the config and rebuild from it, or explain why it was not applied.
+fn reload(bar: &mut Bar) -> Task<Message> {
+    let Some(path) = bar.config.path.clone() else {
+        return Task::none();
+    };
+
+    let next = match config::reread(&path) {
+        Ok(next) => next,
+        Err(problem) => {
+            eprintln!(
+                "ricebar: {} is invalid, keeping the running config:",
+                path.display()
+            );
+            eprintln!("{problem}");
+            bar.warn(format!(
+                "{} is invalid.\nThe bar is still running the config it started with.\n\n{problem}",
+                path.display()
+            ));
+            return Task::none();
+        }
+    };
+
+    let fixed = config::fixed_differences(&bar.config, &next);
+    if !fixed.is_empty() {
+        let changed = fixed.join(", ");
+        eprintln!("ricebar: {changed} changed; restart ricebar to apply");
+        bar.warn(format!(
+            "{changed} changed.\nThe bar's surface is sized and placed once, when it is created, so restart ricebar to apply this."
+        ));
+        return Task::none();
+    }
+
+    // Everything drawn comes from the config, so a new Bar is the cheapest
+    // rebuild that cannot leave anything stale behind.
+    let closed = close_popup(bar);
+    let retiring = bar.retiring;
+    let generation = bar.generation.wrapping_add(1);
+
+    *bar = Bar::new(next);
+
+    // The popup's surface is still on its way out, and its last draw must not
+    // fall through to rendering the whole bar into it.
+    bar.retiring = retiring;
+    bar.generation = generation;
+
+    eprintln!("ricebar: reloaded {}", path.display());
+    closed
 }
 
 pub fn update(bar: &mut Bar, message: Message) -> Task<Message> {
@@ -264,6 +424,7 @@ pub fn update(bar: &mut Bar, message: Message) -> Task<Message> {
 
             close_popup(bar)
         }
+        Message::ConfigChanged => reload(bar),
         // `to_layer_message` appends its own variants to this enum. Upstream's
         // example ends with `unreachable!()`, which is a panic waiting to happen.
         _ => Task::none(),
