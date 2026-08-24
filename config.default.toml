@@ -33,8 +33,28 @@ urgent = "#f38ba8"        # wants attention, e.g. today in the calendar
 border-color = "#89b4fa"
 border-width = 0
 border-radius = 0
+# How big a picture icon is drawn. Glyphs ignore this and follow font-size,
+# because a picture has no font to take its size from.
+icon-size = 18
 
 # --- built-in modules ---------------------------------------------------
+#
+# Icons can be pictures rather than glyphs. Anything in an `icons` list that
+# looks like a path -- it has a "/" in it, or starts with "~" -- is loaded as a
+# file; svg, png and jpeg all work. Everything else is text, so a Nerd Font
+# glyph, a word and an emoji are all still fine.
+#
+# An svg named *-symbolic.svg is recoloured to follow the module's colours, the
+# freedesktop convention for a monochrome icon. Any other svg keeps the colours
+# it was drawn with, and a png always does.
+#
+# The commented lines below use icons from a standard theme -- Adwaita, Papirus
+# and Breeze all carry these names. Uncomment one to try it, and if nothing
+# appears, ricebar says on stderr which file it could not find. To see what is
+# installed:
+#
+#   ls /usr/share/icons/
+#   find /usr/share/icons/Adwaita -name 'weather-clear*'
 
 [module.clock]
 format = "%Y-%m-%d %H:%M:%S"
@@ -62,6 +82,9 @@ format = "{icon} {value}"
 colors = ["#a6e3a1", "#f9e2af", "#f38ba8"]
 interval = 2
 background = "#313244"
+# A picture instead of the built-in glyph. Symbolic, so it still turns amber
+# and red with load like the glyph does:
+# icons = ["/usr/share/icons/Adwaita/symbolic/status/processor-symbolic.svg"]
 
 [module.memory]
 format = "{icon} {value}"
@@ -80,6 +103,14 @@ format = "{icon} {value}"
 interval = 10
 background = "#313244"
 foreground = "#a6e3a1"
+# A ramp of pictures: lowest charge first, as with glyphs. Any length works --
+# the level is spread across however many are listed.
+# icons = [
+#     "/usr/share/icons/Adwaita/symbolic/status/battery-level-0-symbolic.svg",
+#     "/usr/share/icons/Adwaita/symbolic/status/battery-level-30-symbolic.svg",
+#     "/usr/share/icons/Adwaita/symbolic/status/battery-level-60-symbolic.svg",
+#     "/usr/share/icons/Adwaita/symbolic/status/battery-level-100-symbolic.svg",
+# ]
 
 [module.backlight]
 format = "{icon} {value}"
@@ -146,9 +177,16 @@ background = "#313244"
 # process instead of forking every interval. Without LOCATION, wttr.in guesses
 # from your IP address, which tends to mean wherever your ISP terminates it —
 # set it to a real place: LOCATION='Lublin,Poland'
+#
+# Set ICONS and the condition picks a picture instead of a glyph. A few were
+# written to the directory below on first run, so this works as it stands --
+# point it at an icon theme's status directory to use that instead, since the
+# names are the freedesktop ones:
+#
+#   exec = "ICONS=/usr/share/icons/Adwaita/symbolic/status @SCRIPTS@/weather.sh"
 [[module.custom]]
 name = "weather"
-exec = "@SCRIPTS@/weather.sh"
+exec = "ICONS=@ICONS@ @SCRIPTS@/weather.sh"
 stream = true
 tooltip = "Fetching weather..."
 

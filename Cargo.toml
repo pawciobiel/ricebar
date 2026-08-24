@@ -14,7 +14,11 @@ readme = "README.md"
 exclude = ["/docs", "/dev/*.conf", "/dev/*.kdl"]
 
 [dependencies]
-iced = { version = "0.14", features = ["tokio"] }
+# `image` and `svg` are what let an icon be a picture on disk rather than a
+# font glyph. They pull in decoders and resvg, which is most of ricebar's
+# compile time -- worth it, since a bar people rice is a bar whose icons they
+# want to choose.
+iced = { version = "0.14", features = ["tokio", "image", "svg"] }
 iced_layershell = "0.19.1"
 jiff = "0.2"
 serde = { version = "1", features = ["derive"] }

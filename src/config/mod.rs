@@ -163,6 +163,10 @@ pub struct Style {
     pub border_color: Rgba,
     pub border_width: f32,
     pub border_radius: f32,
+    /// How big a graphical icon is drawn, in pixels. Glyphs ignore this and
+    /// follow `font-size`, which is why it is separate: a picture has no font
+    /// to take its size from.
+    pub icon_size: f32,
 }
 
 impl Default for Style {
@@ -177,6 +181,7 @@ impl Default for Style {
             border_color: Rgba::new(0x89, 0xb4, 0xfa),
             border_width: 0.0,
             border_radius: 0.0,
+            icon_size: 18.0,
         }
     }
 }
@@ -206,8 +211,11 @@ pub struct Modules {
 pub struct Sensor {
     /// `{icon}` and `{value}` are replaced. Drop `{value}` for an icon alone.
     pub format: String,
-    /// Lowest level first. Empty uses the built-in set for that sensor.
+    /// Lowest level first. Empty uses the built-in set for that sensor. An
+    /// entry that looks like a path is a picture rather than a glyph.
     pub icons: Vec<String>,
+    /// Overrides `[bar.style] icon-size` for this module alone.
+    pub icon_size: Option<f32>,
     /// Text colours, lowest level first, chosen the same way as `icons`:
     /// green, amber, red reads as fine, busy, struggling. Empty uses
     /// `foreground`.
@@ -229,6 +237,7 @@ impl Default for Sensor {
         Self {
             format: String::from("{icon} {value}"),
             icons: Vec::new(),
+            icon_size: None,
             colors: Vec::new(),
             interval: 5,
             on_scroll_up: None,
@@ -282,8 +291,11 @@ pub struct Custom {
     pub label: String,
     /// `{icon}` and `{value}` are replaced.
     pub format: String,
-    /// Lowest level first, chosen by the `percentage` a command reports.
+    /// Lowest level first, chosen by the `percentage` a command reports. An
+    /// entry that looks like a path is a picture rather than a glyph.
     pub icons: Vec<String>,
+    /// Overrides `[bar.style] icon-size` for this module alone.
+    pub icon_size: Option<f32>,
     /// Text colours, chosen the same way as `icons`.
     pub colors: Vec<Rgba>,
     /// Shown on hover, unless the command prints its own.
@@ -319,6 +331,7 @@ impl Default for Custom {
             label: String::new(),
             format: String::from("{icon}{value}"),
             icons: Vec::new(),
+            icon_size: None,
             colors: Vec::new(),
             tooltip: None,
             on_click: None,

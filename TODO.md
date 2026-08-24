@@ -68,21 +68,38 @@ work does not have to be rediscovered.
       launcher.
 - [x] **Scroll actions.** `on-scroll-up`/`on-scroll-down` on custom modules and
       on the built-in sensors, which is what backlight and volume wanted.
-- [ ] **Graphical icons, and icon themes.** Today a module's icon is a glyph
-      from a font, which limits it to what a Nerd Font carries and to one
-      colour. Two steps:
+- [ ] **A font per module.** `[bar] font` is bar-wide, so an icon must exist in
+      the one family the whole bar uses. Picking any glyph is already possible
+      through `icons`, but not picking a *face* — a bar in JetBrainsMono cannot
+      put one module in Material Symbols without moving everything.
 
-      1. An image path: `icon = "/usr/share/icons/.../firefox.svg"`. iced can
-         draw both, but its `image` and `svg` widgets are behind cargo
-         features that are not enabled yet, and SVG brings `resvg` in.
-      2. A named lookup against the freedesktop icon theme spec, so
-         `icon-theme = "candy-icons"` plus `icon = "firefox"` resolves through
-         `~/.local/share/icons`, `/usr/share/icons`, size directories and
-         `index.theme` inheritance. Worth using an existing crate rather than
-         implementing the spec.
+      A `font` key on sensors and custom modules, passed to that widget's
+      `text`, would close it. Small, and it makes fallback explicit instead of
+      leaving it to whatever fontconfig happens to substitute. Graphical icons
+      are the other half of the same problem and are done; this is the half
+      that is left.
+- [x] **Graphical icons.** Done, in `src/modules/icon.rs`. An entry in an
+      `icons` list that looks like a path — it contains `/`, or starts with
+      `~` — is loaded as a picture; svg, png and jpeg all work, and one ramp
+      can mix them with glyphs. `[bar.style] icon-size` sizes them, with a
+      per-module `icon-size` to override it, because a picture has no font to
+      take its size from.
 
-      Scripts should be able to name one too, so a streaming script can return
-      `{"icon": "audio-volume-high"}` alongside its text.
+      Colour follows the freedesktop convention rather than a config key: an
+      svg named `*-symbolic.svg` is recoloured to follow the module's `colors`,
+      anything else keeps the colours it was drawn with. That is what lets a
+      symbolic memory icon turn amber under load while a weather icon keeps its
+      yellow sun. A png can never be recoloured.
+
+      Scripts can name one too: `{"icon": "/path/to/weather-storm.svg"}`
+      alongside the text, which outranks whatever `percentage` would have
+      chosen. That is for the cases where the icon is not a level at all — a
+      weather condition, a keyboard layout, whether something is connected.
+      `dev/scripts/weather.sh` does exactly this when `ICONS` is set.
+
+      A few weather icons ship in `dev/icons/weather/` and are written out on
+      first run, because most distributions carry no weather icons at all and
+      a config whose example paths do not exist teaches nothing.
 - [x] **`format` templating.** `{icon}` and `{value}`, on both custom modules
       and the built-in sensors.
 - [x] **Streaming scripts.** `stream = true` keeps `exec` running and reads a
@@ -293,6 +310,20 @@ none of them stops the bar or its other modules.
 - [ ] **A module that has gone stale.** A streaming script that stops printing
       looks identical to one with nothing to say. Worth marking a module whose
       last update is far older than its interval.
+
+## Last, and least urgent
+
+- [ ] **Icon themes by name.** `icon-theme = "candy-icons"` with
+      `icons = ["cpu-symbolic"]`, resolved through the freedesktop icon theme
+      spec instead of an absolute path: `~/.local/share/icons`,
+      `/usr/share/icons`, `$XDG_DATA_DIRS`, size directories, and `index.theme`
+      inheritance.
+
+      Nicer to write than a path, and it follows the user's theme when they
+      change it — but it is the whole spec, and worth pulling in
+      `freedesktop-icons` rather than implementing. Deliberately last: paths
+      already cover what people actually ask for, and a script that knows its
+      own icons can name them itself.
 
 ## Known constraints (not bugs)
 

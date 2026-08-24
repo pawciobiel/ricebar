@@ -22,7 +22,9 @@ use iced::{Element, Length, Subscription, Task};
 use serde::Deserialize;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
-use super::{Content, Direction, Entry, Event, Module, Popup, color_for, icon_for, spawn};
+use super::{
+    Content, Direction, Entry, Event, Icon, Module, Popup, color_for, icon_for, labelled, spawn,
+};
 use crate::config;
 
 pub struct Custom {
@@ -31,7 +33,8 @@ pub struct Custom {
     source: Option<Source>,
     label: String,
     format: String,
-    icons: Vec<String>,
+    icons: Vec<Icon>,
+    icon_size: Option<f32>,
     colors: Vec<config::Rgba>,
     on_click: Option<String>,
     on_scroll_up: Option<String>,
@@ -84,7 +87,8 @@ impl Custom {
             source,
             label: config.label.clone(),
             format: config.format.clone(),
-            icons: config.icons.clone(),
+            icons: config.icons.iter().map(|icon| Icon::parse(icon)).collect(),
+            icon_size: config.icon_size,
             colors: config.colors.clone(),
             on_click: trusted.then(|| config.on_click.clone()).flatten(),
             on_scroll_up: trusted.then(|| config.on_scroll_up.clone()).flatten(),
@@ -105,6 +109,7 @@ impl Custom {
                     tooltip: config.tooltip.clone(),
                     failed: false,
                     percentage: None,
+                    icon: None,
                 }
             } else {
                 Content::error(format!(
@@ -115,28 +120,56 @@ impl Custom {
         }
     }
 
-    fn label(&self) -> String {
-        let icon = self
-            .content
-            .percentage
-            .map(|percentage| icon_for(percentage / 100.0, &self.icons))
-            .unwrap_or_default();
+    /// The icon to draw, if there is one.
+    ///
+    /// A script naming one outranks the level: a weather condition or a
+    /// keyboard layout is not a percentage of anything. Otherwise the
+    /// `percentage` it reported picks from the configured list.
+    fn icon(&self) -> Option<Icon> {
+        if let Some(named) = &self.content.icon {
+            return Some(Icon::parse(named));
+        }
 
-        let value = if self.content.text.is_empty() {
-            self.label.as_str()
+        let Some(percentage) = self.content.percentage else {
+            // Nothing reported a level. A ramp needs one to choose from, but a
+            // single icon does not -- that is a module with a fixed picture,
+            // such as a launcher button, and it should simply show it.
+            return match self.icons.as_slice() {
+                [only] => Some(only.clone()),
+                _ => None,
+            };
+        };
+
+        icon_for(percentage / 100.0, &self.icons).cloned()
+    }
+
+    /// The `{value}` half of the format: whatever the command last printed, or
+    /// the fixed label for a module that has no command.
+    fn value(&self) -> &str {
+        if self.content.text.is_empty() {
+            &self.label
         } else {
-            self.content.text.as_str()
+            &self.content.text
+        }
+    }
+
+    /// The whole module as one string.
+    ///
+    /// Only used when a ticker is scrolling, which windows a fixed number of
+    /// characters and so cannot carry a picture. A ticker therefore renders
+    /// its icon as text, and a path configured on one shows as the path.
+    fn scrolled(&self, ticker: &Ticker) -> String {
+        let icon = match self.icon() {
+            Some(Icon::Glyph(glyph)) => glyph,
+            _ => String::new(),
         };
 
         let label = self
             .format
-            .replace("{icon}", icon)
-            .replace("{value}", value);
+            .replace("{icon}", &icon)
+            .replace("{value}", self.value());
 
-        match &self.ticker {
-            Some(ticker) => ticker.window(&label),
-            None => label,
-        }
+        ticker.window(&label)
     }
 }
 
@@ -234,7 +267,19 @@ impl Module for Custom {
                 .unwrap_or(style.foreground)
                 .color()
         };
-        let label = text(self.label()).color(foreground);
+        // A scrolling module is one windowed string, so it stays text. Any
+        // other renders its icon as a widget, which is what lets it be a
+        // picture rather than a glyph.
+        let label: Element<'_, Event> = match &self.ticker {
+            Some(ticker) => text(self.scrolled(ticker)).color(foreground).into(),
+            None => labelled(
+                &self.format,
+                self.icon(),
+                self.value(),
+                foreground,
+                self.icon_size.unwrap_or(style.icon_size),
+            ),
+        };
 
         let press = if self.popup.is_some() {
             Some(Event::TogglePopup)
@@ -245,7 +290,7 @@ impl Module for Custom {
         // Without an action there is nothing to click, so stay a plain label.
         let Some(press) = press else {
             let Some(background) = self.background else {
-                return label.into();
+                return label;
             };
 
             return container(label)
@@ -432,6 +477,10 @@ struct Output {
     tooltip: Option<String>,
     #[serde(default)]
     percentage: Option<f32>,
+    /// A glyph or a path, chosen by the script itself. Overrides whatever
+    /// `percentage` would have picked from the module's `icons`.
+    #[serde(default)]
+    icon: Option<String>,
 }
 
 fn steps(step: &Duration) -> impl Stream<Item = Event> + use<> {
@@ -563,6 +612,7 @@ fn parse(line: &str) -> Content {
                 tooltip: parsed.tooltip,
                 failed: false,
                 percentage: parsed.percentage,
+                icon: parsed.icon,
             },
             // It meant to be JSON and is not, so say so rather than printing
             // the broken JSON into the bar as though it were a reading.
@@ -575,5 +625,6 @@ fn parse(line: &str) -> Content {
         tooltip: None,
         failed: false,
         percentage: None,
+        icon: None,
     }
 }

@@ -11,10 +11,10 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use iced::futures::{SinkExt, Stream};
-use iced::widget::{container, text};
+use iced::widget::container;
 use iced::{Element, Length, Subscription, Task};
 
-use super::{BROKEN, Direction, Event, Module, color_for, icon_for};
+use super::{BROKEN, Direction, Event, Icon, Module, color_for, icon_for, labelled};
 use crate::config;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,7 +72,8 @@ struct Reading {
 pub struct Sensor {
     kind: Kind,
     format: String,
-    icons: Vec<String>,
+    icons: Vec<Icon>,
+    icon_size: Option<f32>,
     interval: Duration,
     colors: Vec<config::Rgba>,
     on_scroll_up: Option<String>,
@@ -88,16 +89,20 @@ pub struct Sensor {
 
 impl Sensor {
     pub fn new(kind: Kind, config: &config::Sensor) -> Self {
-        let icons = if config.icons.is_empty() {
-            kind.icons().iter().map(|icon| (*icon).to_owned()).collect()
+        let icons: Vec<Icon> = if config.icons.is_empty() {
+            kind.icons()
+                .iter()
+                .map(|glyph| Icon::Glyph((*glyph).to_owned()))
+                .collect()
         } else {
-            config.icons.clone()
+            config.icons.iter().map(|icon| Icon::parse(icon)).collect()
         };
 
         let mut sensor = Self {
             kind,
             format: config.format.clone(),
             icons,
+            icon_size: config.icon_size,
             // A zero interval would read as fast as the loop can turn.
             interval: Duration::from_secs(config.interval.max(1)),
             colors: config.colors.clone(),
@@ -131,17 +136,12 @@ impl Sensor {
         });
     }
 
-    fn icon(&self) -> &str {
+    fn icon(&self) -> Option<Icon> {
         // A charging battery names its own glyph; the rest go by level.
-        self.reading
-            .icon
-            .unwrap_or_else(|| icon_for(self.reading.level, &self.icons))
-    }
-
-    fn label(&self) -> String {
-        self.format
-            .replace("{icon}", self.icon())
-            .replace("{value}", &self.reading.value)
+        match self.reading.icon {
+            Some(glyph) => Some(Icon::Glyph(String::from(glyph))),
+            None => icon_for(self.reading.level, &self.icons).cloned(),
+        }
     }
 }
 
@@ -198,10 +198,16 @@ impl Module for Sensor {
                 .or(self.foreground)
                 .unwrap_or(style.foreground)
         };
-        let label = text(self.label()).color(foreground.color());
+        let label = labelled(
+            &self.format,
+            self.icon(),
+            &self.reading.value,
+            foreground.color(),
+            self.icon_size.unwrap_or(style.icon_size),
+        );
 
         let Some(background) = self.background else {
-            return label.into();
+            return label;
         };
 
         container(label)
@@ -507,8 +513,20 @@ mod tests {
     use super::*;
     use crate::modules::icon_for;
 
-    fn icons(kind: Kind) -> Vec<String> {
-        kind.icons().iter().map(|icon| (*icon).to_owned()).collect()
+    fn icons(kind: Kind) -> Vec<Icon> {
+        kind.icons()
+            .iter()
+            .map(|glyph| Icon::Glyph((*glyph).to_owned()))
+            .collect()
+    }
+
+    /// The glyph an entry holds. Built-in ramps are always glyphs, so anything
+    /// else here is a bug in the test rather than a case to handle.
+    fn glyph(icon: Option<&Icon>) -> &str {
+        match icon {
+            Some(Icon::Glyph(glyph)) => glyph,
+            _ => panic!("a built-in ramp holds only glyphs"),
+        }
     }
 
     #[test]
@@ -519,10 +537,15 @@ mod tests {
         for kind in [Kind::Temperature, Kind::Battery, Kind::Backlight] {
             let icons = icons(kind);
 
-            assert_eq!(icon_for(0.0, &icons), icons[0], "{} lowest", kind.name());
             assert_eq!(
-                icon_for(1.0, &icons),
-                icons[icons.len() - 1],
+                glyph(icon_for(0.0, &icons)),
+                glyph(icons.first()),
+                "{} lowest",
+                kind.name()
+            );
+            assert_eq!(
+                glyph(icon_for(1.0, &icons)),
+                glyph(icons.last()),
                 "{} highest",
                 kind.name()
             );
@@ -551,11 +574,11 @@ mod tests {
     fn a_level_maps_across_the_whole_ramp() {
         let icons = icons(Kind::Backlight);
 
-        assert_eq!(icon_for(0.0, &icons), icons[0]);
-        assert_eq!(icon_for(0.5, &icons), icons[4]);
-        assert_eq!(icon_for(1.0, &icons), icons[8]);
+        assert_eq!(glyph(icon_for(0.0, &icons)), glyph(icons.first()));
+        assert_eq!(glyph(icon_for(0.5, &icons)), glyph(icons.get(4)));
+        assert_eq!(glyph(icon_for(1.0, &icons)), glyph(icons.get(8)));
         // Out of range cannot wrap round to the other end.
-        assert_eq!(icon_for(1.5, &icons), icons[8]);
-        assert_eq!(icon_for(-0.5, &icons), icons[0]);
+        assert_eq!(glyph(icon_for(1.5, &icons)), glyph(icons.get(8)));
+        assert_eq!(glyph(icon_for(-0.5, &icons)), glyph(icons.first()));
     }
 }

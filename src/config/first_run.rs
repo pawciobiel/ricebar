@@ -20,6 +20,47 @@ const MODULES: &str = "# @MODULES@";
 /// Replaced with the directory the scripts were written to.
 const SCRIPTS_DIR: &str = "@SCRIPTS@";
 
+/// Replaced with the directory the example icons were written to.
+const ICONS_DIR: &str = "@ICONS@";
+
+/// A few weather icons, so `icons` has somewhere real to point on a machine
+/// with no icon theme installed. Named the freedesktop way, so an installed
+/// theme can be pointed at instead without changing anything else.
+const WEATHER_ICONS: &[(&str, &str)] = &[
+    (
+        "weather-clear.svg",
+        include_str!("../../dev/icons/weather/weather-clear.svg"),
+    ),
+    (
+        "weather-clouds.svg",
+        include_str!("../../dev/icons/weather/weather-clouds.svg"),
+    ),
+    (
+        "weather-few-clouds.svg",
+        include_str!("../../dev/icons/weather/weather-few-clouds.svg"),
+    ),
+    (
+        "weather-fog.svg",
+        include_str!("../../dev/icons/weather/weather-fog.svg"),
+    ),
+    (
+        "weather-overcast.svg",
+        include_str!("../../dev/icons/weather/weather-overcast.svg"),
+    ),
+    (
+        "weather-showers.svg",
+        include_str!("../../dev/icons/weather/weather-showers.svg"),
+    ),
+    (
+        "weather-snow.svg",
+        include_str!("../../dev/icons/weather/weather-snow.svg"),
+    ),
+    (
+        "weather-storm.svg",
+        include_str!("../../dev/icons/weather/weather-storm.svg"),
+    ),
+];
+
 const SCRIPTS: &[(&str, &str)] = &[
     (
         "microphone.sh",
@@ -109,11 +150,14 @@ const RIGHT: &[Offered] = &[
     },
 ];
 
-/// Write the starter config and its scripts, and say where they went.
+/// Write the starter config, its scripts and its icons, and say where they
+/// went.
 pub fn create(path: &Path) -> io::Result<()> {
     let dir = path.parent().unwrap_or_else(|| Path::new("."));
     let scripts = dir.join("scripts");
+    let icons = dir.join("icons/weather");
     std::fs::create_dir_all(&scripts)?;
+    std::fs::create_dir_all(&icons)?;
 
     for (name, body) in SCRIPTS {
         let script = scripts.join(name);
@@ -126,13 +170,26 @@ pub fn create(path: &Path) -> io::Result<()> {
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))?;
     }
 
+    // Somewhere to point `icons` at without hunting for an icon theme first.
+    // Few distributions ship weather icons, and a config whose example paths
+    // do not exist teaches nothing.
+    for (name, body) in WEATHER_ICONS {
+        let icon = icons.join(name);
+        if icon.exists() {
+            continue;
+        }
+        std::fs::write(&icon, body)?;
+    }
+
     let text = TEMPLATE
         .replace(MODULES, &lists())
-        .replace(SCRIPTS_DIR, &embed(&scripts.to_string_lossy()));
+        .replace(SCRIPTS_DIR, &embed(&scripts.to_string_lossy()))
+        .replace(ICONS_DIR, &embed(&icons.to_string_lossy()));
     std::fs::write(path, text)?;
 
     eprintln!("ricebar: no config found, wrote {}", path.display());
     eprintln!("ricebar: example scripts are in {}", scripts.display());
+    eprintln!("ricebar: example icons are in {}", icons.display());
     Ok(())
 }
 
