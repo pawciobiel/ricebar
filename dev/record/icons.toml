@@ -1,0 +1,87 @@
+# Graphical icons, for testing on each compositor. Run from the repository
+# root; the paths below are relative to it.
+#
+#   ./target/release/ricebar -c dev/record/icons.toml
+#
+# Deliberately mixes all four kinds in one bar: glyphs, a colourful svg, a
+# recoloured symbolic svg and a png ramp.
+
+[bar]
+position = "top"
+height = 34
+spacing = 10
+padding = 10
+vertical-align = "center"
+font = "JetBrainsMono Nerd Font"
+font-size = 15
+
+modules-left = ["workspaces", "svg", "png"]
+modules-center = ["weather"]
+modules-right = ["cpu", "memory", "battery", "clock"]
+
+[bar.style]
+background = "#1e1e2e"
+foreground = "#cdd6f4"
+accent = "#89b4fa"
+muted = "#45475a"
+dim = "#6c7086"
+urgent = "#f38ba8"
+icon-size = 20
+
+[module.clock]
+format = "%H:%M:%S"
+interval = 1
+
+[module.workspaces]
+compositor = "auto"
+
+# A glyph, unchanged: the default still works.
+[module.cpu]
+format = "{icon} {value}"
+colors = ["#a6e3a1", "#f9e2af", "#f38ba8"]
+interval = 2
+background = "#313244"
+
+# A symbolic svg, so it follows `colors` as the glyph would.
+[module.memory]
+format = "{icon} {value}"
+icons = ["dev/record/icons/memory-symbolic.svg"]
+colors = ["#a6e3a1", "#f9e2af", "#f38ba8"]
+interval = 5
+background = "#313244"
+
+# A png ramp: five levels, from a real icon set on this machine.
+[module.battery]
+format = "{icon} {value}"
+icons = [
+    "/usr/share/blueman/pixmaps/blueman-battery-10.png",
+    "/usr/share/blueman/pixmaps/blueman-battery-30.png",
+    "/usr/share/blueman/pixmaps/blueman-battery-50.png",
+    "/usr/share/blueman/pixmaps/blueman-battery-70.png",
+    "/usr/share/blueman/pixmaps/blueman-battery-100.png",
+]
+interval = 10
+background = "#313244"
+
+# A colourful svg, which keeps its own colours.
+[[module.custom]]
+name = "svg"
+label = "svg"
+format = "{icon}{value}"
+icons = ["/usr/share/icons/hicolor/scalable/apps/htop.svg"]
+tooltip = "A colourful svg, drawn as it was made"
+
+# A png, which never recolours.
+[[module.custom]]
+name = "png"
+label = "png"
+format = "{icon}{value}"
+icons = ["/usr/share/blueman/pixmaps/blueman-battery-60.png"]
+tooltip = "A png, which cannot be recoloured"
+
+# Weather with picture icons, chosen from the condition by the script.
+[[module.custom]]
+name = "weather"
+exec = "LOCATION='Lublin,Poland' ICONS=dev/icons/weather dev/scripts/weather.sh"
+stream = true
+tooltip = "Fetching weather..."

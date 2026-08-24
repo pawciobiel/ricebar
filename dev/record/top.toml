@@ -20,7 +20,7 @@ modules-right = ["volume", "cpu", "memory", "temperature", "battery", "power"]
 height = 24
 modules-left = ["weather"]
 modules-center = ["ticker"]
-modules-right = ["kernel"]
+modules-right = ["disk"]
 
 [bar.style]
 background = "#1e1e2e"
@@ -32,6 +32,7 @@ urgent = "#f38ba8"
 border-color = "#89b4fa"
 border-width = 0
 border-radius = 0
+icon-size = 18
 
 [module.clock]
 format = "%A %-d %B   %H:%M"
@@ -57,6 +58,7 @@ background = "#313244"
 
 [module.memory]
 format = "{icon} {value}"
+icons = ["dev/record/icons/memory-symbolic.svg"]
 colors = ["#a6e3a1", "#f9e2af", "#f38ba8"]
 interval = 5
 background = "#313244"
@@ -98,22 +100,22 @@ background = "#313244"
 
 [[module.custom]]
 name = "weather"
-exec = "LOCATION='Warsaw,Poland' dev/scripts/weather.sh"
+exec = "LOCATION='Warsaw,Poland' ICONS=dev/icons/weather dev/scripts/weather.sh"
 stream = true
 tooltip = "Fetching weather..."
 
 [[module.custom]]
 name = "ticker"
-exec = "dev/scripts/ticker.sh"
+exec = "printf '%s\\n' \"a second row is where something too wide for a status bar belongs   \u2022   this one scrolls\"; sleep 86400"
 stream = true
 scroll-width = 44
 scroll-speed = 6
 
 [[module.custom]]
-name = "kernel"
-exec = "uname -r"
-interval = 3600
-tooltip = "Running kernel"
+name = "disk"
+exec = "df -h / | awk 'NR == 2 {print $4\" free\"}'"
+interval = 60
+tooltip = "Space left on /"
 
 # Nothing here powers anything off: a recording should not depend on the
 # machine surviving a mistimed click.
