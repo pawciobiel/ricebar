@@ -33,6 +33,11 @@ pub struct Bar {
     retiring: Option<window::Id>,
     /// Where the warning about the config sits in `modules`, once there is one.
     notice: Option<usize>,
+    /// When the pointer last entered a module. A leave arriving during a
+    /// popup's opening grace is deferred rather than dropped, and this is how
+    /// the deferred leave tells a real departure from the echo of the popup
+    /// appearing: if the pointer came back, it did so after the leave.
+    entered: Instant,
     /// How many times the config has been reloaded. Part of every
     /// subscription's identity, so a reload restarts the streams behind the
     /// new modules rather than leaving them attached to the old ones.
@@ -105,6 +110,7 @@ impl Bar {
             scrolled: HashMap::new(),
             retiring: None,
             notice: None,
+            entered: Instant::now(),
             generation: 0,
         };
 
@@ -173,6 +179,9 @@ pub enum Message {
     Enter(usize),
     /// The pointer left the module at this index.
     Leave(usize),
+    /// A leave that arrived while a popup was still settling, asked again once
+    /// the grace had passed. Carries when it was first seen.
+    Left(usize, Instant),
     /// The pointer scrolled over the module at this index, by however much it
     /// reports at a time.
     Scroll(usize, iced::mouse::ScrollDelta),
@@ -278,6 +287,19 @@ fn stamp(path: &Path) -> Option<(SystemTime, u64)> {
     Some((found.modified().ok()?, found.len()))
 }
 
+/// The pointer really has left the module at this index.
+fn leave(bar: &mut Bar, index: usize) -> Task<Message> {
+    // It may already be on the next one: modules sit side by side, and that
+    // module's enter can arrive before this leave. Closing here would take
+    // away the tooltip that has just opened for it.
+    if bar.hovered.is_some_and(|hovered| hovered != index) {
+        return Task::none();
+    }
+
+    bar.hovered = None;
+    close_popup(bar)
+}
+
 /// Re-read the config and rebuild from it, or explain why it was not applied.
 fn reload(bar: &mut Bar) -> Task<Message> {
     let Some(path) = bar.config.path.clone() else {
@@ -373,6 +395,7 @@ pub fn update(bar: &mut Bar, message: Message) -> Task<Message> {
         },
         Message::Enter(index) => {
             bar.hovered = Some(index);
+            bar.entered = Instant::now();
             open_popup(bar)
         }
         Message::Scroll(index, delta) => {
@@ -408,21 +431,33 @@ pub fn update(bar: &mut Bar, message: Message) -> Task<Message> {
             }
 
             // A popup's own appearance makes iced report the pointer as having
-            // left the bar. Treat a leave that arrives this soon as that echo,
-            // and keep `hovered` intact so a later, real leave still closes it.
-            if bar
-                .popup
-                .as_ref()
-                .is_some_and(|popup| popup.opened.elapsed() < POPUP_GRACE)
-            {
+            // left the bar. A leave arriving this soon is usually that echo --
+            // but it is also what a quick sweep across the bar looks like, and
+            // dropping it would strand the tooltip on screen with no further
+            // leave ever coming. Ask again once the grace has passed.
+            if let Some(popup) = &bar.popup {
+                let settling = POPUP_GRACE.saturating_sub(popup.opened.elapsed());
+
+                if !settling.is_zero() {
+                    let seen = Instant::now();
+
+                    return Task::future(async move {
+                        tokio::time::sleep(settling).await;
+                        Message::Left(index, seen)
+                    });
+                }
+            }
+
+            leave(bar, index)
+        }
+        Message::Left(index, seen) => {
+            // The pointer came back while this was waiting, so the leave that
+            // scheduled it was the popup's echo after all.
+            if bar.entered > seen {
                 return Task::none();
             }
 
-            if bar.hovered == Some(index) {
-                bar.hovered = None;
-            }
-
-            close_popup(bar)
+            leave(bar, index)
         }
         Message::ConfigChanged => reload(bar),
         // `to_layer_message` appends its own variants to this enum. Upstream's
