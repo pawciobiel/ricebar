@@ -111,10 +111,13 @@ so a weather icon keeps its yellow sun.
 ## Install
 
 ```sh
-cargo install ricebar
+cargo install --git https://github.com/pawciobiel/ricebar
 ```
 
-Or from source:
+That puts `ricebar` in `~/.cargo/bin`. `cargo install --git … --force` updates
+it later.
+
+Or build it yourself:
 
 ```sh
 git clone https://github.com/pawciobiel/ricebar
@@ -122,6 +125,10 @@ cd ricebar
 cargo build --release
 ./target/release/ricebar
 ```
+
+Not on crates.io: publishing there requires signing in through GitHub and
+granting the account access it does not need. Installing from git needs no
+account at all.
 
 Needs `wayland-client`, `libxkbcommon`, and a Vulkan driver — iced falls back to
 software rendering via `tiny-skia` if wgpu is unavailable.

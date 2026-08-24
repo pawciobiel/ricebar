@@ -8,9 +8,14 @@ repository = "https://github.com/pawciobiel/ricebar"
 keywords = ["wayland", "statusbar", "layer-shell", "iced", "hyprland"]
 categories = ["gui"]
 readme = "README.md"
+# Installed with `cargo install --git`, not from crates.io: publishing there
+# means signing in through GitHub and granting that login access it does not
+# need. The metadata above stays accurate either way, and this stops an
+# accidental `cargo publish` rather than a deliberate one.
+publish = false
 # dev/scripts/ ships: the binary embeds it and writes it out on first run.
 # The rest of dev/ is for working on ricebar, and docs/ holds the README's
-# recordings, which have no business in a crate.
+# recordings, which have no business in a package.
 exclude = ["/docs", "/dev/*.conf", "/dev/*.kdl"]
 
 [dependencies]

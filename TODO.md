@@ -264,7 +264,7 @@ bar or hand it an absurd surface to draw.
 
 - [x] **Ship the example scripts, and start with them.** Done. The scripts are
       `include_str!`-ed into the binary and written next to the config on first
-      run, which means `cargo install ricebar` carries them with no data
+      run, which means `cargo install --git` carries them with no data
       directory for a package to own and no install step to get wrong. They are
       written only if absent, so editing one and deleting the config to start
       again keeps the edits.
@@ -295,8 +295,15 @@ bar or hand it an absurd surface to draw.
       want a second row, and the power menu really does power the machine off,
       so those ship commented with an explanation instead.
 
-- [ ] **Publish to crates.io.** The name is free. Needs a real README badge set,
-      a licence header check and a `cargo publish --dry-run`.
+- [x] **Not publishing to crates.io.** Decided against. Publishing there means
+      signing in through GitHub — there is no other way in — and granting that
+      login access the account does not need. `cargo install --git` installs
+      ricebar without an account of any kind, which suits a bar whose whole
+      dependency story is "one binary and some scripts".
+
+      Nothing in the crate metadata is wasted if that changes: `Cargo.toml`
+      keeps its description, keywords and `exclude`, and `publish = false`
+      stops an accidental `cargo publish` rather than a deliberate one.
 - [ ] **`CLAUDE.md`** with build, lint and test commands for future sessions.
 
 ## Failure behaviour
