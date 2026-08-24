@@ -67,7 +67,7 @@ const SCRIPTS: &[(&str, &str)] = &[
         include_str!("../../dev/scripts/microphone.sh"),
     ),
     ("network.sh", include_str!("../../dev/scripts/network.sh")),
-    ("stocks.sh", include_str!("../../dev/scripts/stocks.sh")),
+    ("stocks.py", include_str!("../../dev/scripts/stocks.py")),
     ("ticker.sh", include_str!("../../dev/scripts/ticker.sh")),
     ("volume.sh", include_str!("../../dev/scripts/volume.sh")),
     ("weather.sh", include_str!("../../dev/scripts/weather.sh")),

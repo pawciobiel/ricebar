@@ -126,7 +126,7 @@ background = "#313244"
 # zloty rates need no key.
 [[module.custom]]
 name = "stocks"
-exec = "SYMBOLS='AAPL MSFT NVDA' FX='USD EUR' ~/.config/ricebar/scripts/stocks.sh"
+exec = "SYMBOLS='AAPL MSFT NVDA' FX='USD EUR' ~/.config/ricebar/scripts/stocks.py"
 stream = true
 scroll-width = 28
 scroll-speed = 3

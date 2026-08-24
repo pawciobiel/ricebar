@@ -41,7 +41,7 @@ stream = true
 
 [[module.custom]]
 name = "stocks"
-exec = "FX='USD EUR' dev/scripts/stocks.sh"
+exec = "FX='USD EUR' dev/scripts/stocks.py"
 stream = true
 scroll-width = 42
 scroll-speed = 5

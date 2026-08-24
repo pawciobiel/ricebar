@@ -42,7 +42,7 @@ scroll-speed = 6
 # and the zloty rates need no key.
 [[module.custom]]
 name = "stocks"
-exec = "SYMBOLS='AAPL MSFT NVDA' FX='USD EUR' ~/.config/ricebar/scripts/stocks.sh"
+exec = "SYMBOLS='AAPL MSFT NVDA' FX='USD EUR' ~/.config/ricebar/scripts/stocks.py"
 stream = true
 scroll-width = 44
 scroll-speed = 5

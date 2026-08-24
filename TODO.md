@@ -280,7 +280,7 @@ bar or hand it an absurd surface to draw.
       | `network.sh`       | `ip`, `iw`                             |
       | `weather.sh`       | `curl`, and the network                |
       | `ticker.sh`        | `top`, `df`, `free`                    |
-      | `stocks.sh`        | `curl`, `python3`                      |
+      | `stocks.py`        | `python3` (no curl: it uses urllib)    |
       | `windows-popup.py` | `python3`, and a compositor CLI        |
 
       Settled by writing the `modules-*` lists from what the machine has:

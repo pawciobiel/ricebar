@@ -170,7 +170,7 @@ popup = "~/.config/ricebar/scripts/windows-popup.py"
 # Markets. Indices and zloty rates need no key at all, so this works as it
 # stands. Individual company quotes come from finnhub, which does need one:
 # set SYMBOLS and put a key in a file of its own rather than here -- see the
-# header of dev/scripts/stocks.sh:
+# header of dev/scripts/stocks.py:
 #
 #   printf '%s\n' 'YOUR_KEY' > ~/.config/ricebar/finnhub.token
 #   chmod 600 ~/.config/ricebar/finnhub.token
@@ -182,7 +182,7 @@ popup = "~/.config/ricebar/scripts/windows-popup.py"
 # finnhub's forex endpoint is paid. Set FX='' to leave them out.
 # [[module.custom]]
 # name = "stocks"
-# exec = "SYMBOLS='AAPL MSFT NVDA' FX='USD EUR' ~/.config/ricebar/scripts/stocks.sh"
+# exec = "SYMBOLS='AAPL MSFT NVDA' FX='USD EUR' ~/.config/ricebar/scripts/stocks.py"
 #
 # Indices default to SP500 DOW NASDAQ FTSE NIKKEI DAX WIG, written as
 # label=symbol; override with INDICES='DAX=^GDAXI WIG=WIG.WA' or turn them off

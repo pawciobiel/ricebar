@@ -214,7 +214,7 @@ tooltip = "Fetching weather..."
 #
 # [[module.custom]]
 # name = "stocks"
-# exec = "FX='USD EUR' @SCRIPTS@/stocks.sh"
+# exec = "FX='USD EUR' @SCRIPTS@/stocks.py"
 # stream = true
 # scroll-width = 46
 # scroll-speed = 6
