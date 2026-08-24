@@ -32,8 +32,12 @@ const WEATHER_ICONS: &[(&str, &str)] = &[
         include_str!("../../dev/icons/weather/weather-clear.svg"),
     ),
     (
-        "weather-clouds.svg",
-        include_str!("../../dev/icons/weather/weather-clouds.svg"),
+        "weather-clear-night.svg",
+        include_str!("../../dev/icons/weather/weather-clear-night.svg"),
+    ),
+    (
+        "weather-few-clouds-night.svg",
+        include_str!("../../dev/icons/weather/weather-few-clouds-night.svg"),
     ),
     (
         "weather-few-clouds.svg",
