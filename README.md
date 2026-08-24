@@ -133,6 +133,12 @@ account at all.
 Needs `wayland-client`, `libxkbcommon`, and a Vulkan driver — iced falls back to
 software rendering via `tiny-skia` if wgpu is unavailable.
 
+Nothing else. The binary links against libc, libgcc and libxkbcommon, and opens
+Wayland and Vulkan at runtime. There is no D-Bus, PulseAudio or PipeWire library
+in it, because audio is not a built-in module: it is a script calling `pactl`,
+which costs nothing on a machine that does not use it, and the first run leaves
+it commented out where `pactl` is missing.
+
 **The first run writes a config for you**, along with the example scripts and
 icons it refers to, and says where they went. What it enables depends on the
 machine: `PATH` decides whether the launcher and the volume module are on, and
