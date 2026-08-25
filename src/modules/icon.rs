@@ -119,10 +119,19 @@ pub fn labelled<'a, Message: 'a>(
     value: &str,
     color: Color,
     size: f32,
+    style: crate::config::Style,
 ) -> Element<'a, Message> {
+    let label = move |body: String| {
+        let drawn = text(body).color(color).size(style.font_size);
+        match style.font {
+            Some(font) => drawn.font(font),
+            None => drawn,
+        }
+    };
+
     let Some((before, after)) = format.split_once("{icon}") else {
         // No slot for one, so the format is all text however it was written.
-        return text(format.replace("{value}", value)).color(color).into();
+        return label(format.replace("{value}", value)).into();
     };
 
     let before = before.replace("{value}", value);
@@ -131,7 +140,7 @@ pub fn labelled<'a, Message: 'a>(
     let mut parts: Vec<Element<'a, Message>> = Vec::with_capacity(3);
 
     if !before.is_empty() {
-        parts.push(text(before).color(color).into());
+        parts.push(label(before).into());
     }
 
     if let Some(icon) = icon {
@@ -139,12 +148,27 @@ pub fn labelled<'a, Message: 'a>(
     }
 
     if !after.is_empty() {
-        parts.push(text(after).color(color).into());
+        parts.push(label(after).into());
     }
 
     // No spacing: the gaps are whatever the format string puts there, which is
     // what makes `"{icon} {value}"` and `"{icon}{value}"` mean what they say.
     row(parts).align_y(Alignment::Center).into()
+}
+
+/// Apply the resolved face and size to a text widget.
+///
+/// Every module draws its labels through this, so `font` on a bar or a module
+/// reaches all of them rather than only the ones that go through [`labelled`].
+pub fn faced<'a>(
+    drawn: iced::widget::Text<'a>,
+    style: crate::config::Style,
+) -> iced::widget::Text<'a> {
+    let drawn = drawn.size(style.font_size);
+    match style.font {
+        Some(font) => drawn.font(font),
+        None => drawn,
+    }
 }
 
 #[cfg(test)]

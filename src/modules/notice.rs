@@ -3,6 +3,7 @@
 use iced::widget::text;
 use iced::{Element, Task};
 
+use super::icon::faced;
 use super::{Content, Event, Module};
 use crate::config;
 
@@ -39,7 +40,7 @@ impl Module for Notice {
     }
 
     fn view(&self, style: config::Style) -> Element<'_, Event> {
-        text(&self.content.text).color(style.urgent.color()).into()
+        faced(text(&self.content.text).color(style.urgent.color()), style).into()
     }
 
     fn tooltip(&self) -> Option<String> {

@@ -204,6 +204,7 @@ impl Module for Sensor {
             &self.reading.value,
             foreground.color(),
             self.icon_size.unwrap_or(style.icon_size),
+            style,
         );
 
         let Some(background) = self.background else {

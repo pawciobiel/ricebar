@@ -2,8 +2,38 @@
 #
 # A module runs only if it is named in one of the modules-* lists below.
 # Remove "clock" from modules-center and the clock is gone.
+#
+# [bar] is one bar on every monitor, which is what most setups want. For
+# several bars, write [[bar]] instead — once per bar, each with its own edge,
+# size, palette and modules:
+#
+#   [[bar]]
+#   output = "eDP-1"
+#   position = "top"
+#   modules-left = ["workspaces"]
+#
+#   [bar.style]
+#   background = "#1e1e2e"
+#
+#   [[bar]]
+#   output = "HDMI-A-1"
+#   position = "bottom"
+#   modules-center = ["stocks"]
+#
+# The module definitions further down are shared: a module named by two bars is
+# built once and drawn twice, so one script feeds both.
 
 [bar]
+# Which monitor this bar belongs on, named as the compositor names it. List
+# them with `hyprctl monitors`, `swaymsg -t get_outputs` or `niri msg outputs`.
+# Leave it unset and the bar appears on every monitor, including one plugged in
+# later. A name matching nothing leaves that bar undrawn, with a warning on the
+# bars that could be placed, rather than putting it on some other monitor -- so
+# undocking removes the external screen's bar instead of stacking it on the
+# built-in one.
+#
+#   output = "eDP-1"
+
 position = "top"          # top | bottom
 height = 32
 margin = [0, 0, 0, 0]     # top, right, bottom, left
@@ -19,6 +49,10 @@ vertical-align = "center" # where modules sit in the bar's height: top | center 
 #
 # A name fontconfig does not know is substituted silently, so if text turns up
 # in the wrong face, check the name with fc-match before suspecting ricebar.
+#
+# Each [[bar]] may name its own, and so may a module -- a module's font wins,
+# then its bar's, then this one. A bar that names none falls back to whatever
+# the process started with, which is the only part that needs a restart.
 font = "JetBrainsMono Nerd Font"
 font-size = 16
 

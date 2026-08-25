@@ -7,6 +7,7 @@ use jiff::civil::{Date, Weekday};
 use jiff::fmt::strtime;
 use jiff::{Span, Zoned};
 
+use super::icon::faced;
 use super::{Event, Module, Popup};
 use crate::config;
 
@@ -124,7 +125,7 @@ impl Module for Clock {
     }
 
     fn view(&self, style: config::Style) -> Element<'_, Event> {
-        let label = text(self.label.as_str());
+        let label = faced(text(self.label.as_str()), style);
 
         // Without a calendar there is nothing to click, so stay a plain label.
         if self.calendar.is_none() {

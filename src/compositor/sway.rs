@@ -38,6 +38,10 @@ impl Compositor for Sway {
             }
         })
     }
+
+    fn outputs(&self) -> Subscription<Vec<String>> {
+        Subscription::run(watch_outputs)
+    }
 }
 
 pub fn available() -> bool {
@@ -55,6 +59,7 @@ const MAGIC: &[u8; 6] = b"i3-ipc";
 const RUN_COMMAND: u32 = 0;
 const GET_WORKSPACES: u32 = 1;
 const SUBSCRIBE: u32 = 2;
+const GET_OUTPUTS: u32 = 3;
 const GET_TREE: u32 = 4;
 
 async fn connect() -> io::Result<UnixStream> {
@@ -170,6 +175,56 @@ fn children(node: &Value) -> impl Iterator<Item = &Value> {
         .filter_map(|key| node.get(key))
         .filter_map(Value::as_array)
         .flatten()
+}
+
+#[derive(Deserialize)]
+struct RawOutput {
+    name: String,
+    active: bool,
+}
+
+async fn outputs() -> io::Result<Vec<String>> {
+    let mut stream = connect().await?;
+    send(&mut stream, GET_OUTPUTS, "").await?;
+    let (_, payload) = receive(&mut stream).await?;
+    let outputs: Vec<RawOutput> = serde_json::from_slice(&payload).map_err(io::Error::other)?;
+
+    // sway keeps disabled and disconnected outputs in the list; a surface on
+    // one of those would never be seen.
+    Ok(outputs
+        .into_iter()
+        .filter(|output| output.active)
+        .map(|output| output.name)
+        .collect())
+}
+
+fn watch_outputs() -> impl Stream<Item = Vec<String>> {
+    iced::stream::channel(4, async |mut output: mpsc::Sender<Vec<String>>| {
+        loop {
+            if let Err(error) = follow_outputs(&mut output).await {
+                eprintln!("ricebar: sway ipc: {error}");
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    })
+}
+
+async fn follow_outputs(sender: &mut mpsc::Sender<Vec<String>>) -> io::Result<()> {
+    let mut events = connect().await?;
+    send(&mut events, SUBSCRIBE, r#"["output"]"#).await?;
+    receive(&mut events).await?;
+
+    if sender.send(outputs().await?).await.is_err() {
+        return Ok(());
+    }
+
+    loop {
+        receive(&mut events).await?;
+
+        if sender.send(outputs().await?).await.is_err() {
+            return Ok(());
+        }
+    }
 }
 
 fn watch() -> impl Stream<Item = Workspaces> {

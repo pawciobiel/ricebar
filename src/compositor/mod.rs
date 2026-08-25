@@ -38,6 +38,27 @@ pub trait Compositor {
 
     /// Ask the compositor to switch to a workspace.
     fn focus(&self, id: i32) -> Task<()>;
+
+    /// The monitors that exist, pushed again whenever one is plugged in or
+    /// taken away.
+    ///
+    /// The bar creates one layer surface per monitor itself, rather than
+    /// letting the runtime do it, because that is the only way to know which
+    /// surface is on which monitor — so this is where hotplug comes from.
+    fn outputs(&self) -> Subscription<Vec<String>>;
+}
+
+/// The monitors to build bars on, whoever is able to say.
+///
+/// Without a backend there is no list to be had: layer-shell clients are told
+/// about outputs only through the surfaces they create on them. Yielding an
+/// empty list says exactly that, and the caller then asks the compositor to
+/// place each bar wherever it likes.
+pub fn outputs(preference: config::Backend) -> Subscription<Vec<String>> {
+    match detect(preference) {
+        Some(compositor) => compositor.outputs(),
+        None => Subscription::run(|| iced::futures::stream::once(async { Vec::new() })),
+    }
 }
 
 /// Pick a backend, either the one asked for or whichever the environment

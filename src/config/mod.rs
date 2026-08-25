@@ -9,33 +9,73 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[derive(Debug, Clone)]
 pub struct Config {
-    pub bar: Bar,
+    /// Every bar the config describes, in the order it wrote them. A `[bar]`
+    /// table is one bar and `[[bar]]` is several; by here the difference is
+    /// gone.
+    pub bars: Vec<Bar>,
     pub module: Modules,
     /// Whether the config is safe to take shell commands from. See
     /// [`trustworthy`]. Not a config key; decided when the file is read.
-    #[serde(skip, default = "yes")]
     pub trusted: bool,
     /// Where this was read from, so the bar can watch it for changes. Not a
     /// config key. `None` when there is nowhere to read one from at all.
-    #[serde(skip)]
     pub path: Option<PathBuf>,
     /// Why this is the built-in default rather than what the file says. Not a
     /// config key; set when a config was found but could not be used, so the
     /// bar can say so where it will be seen.
-    #[serde(skip)]
     pub problem: Option<String>,
 }
 
-fn yes() -> bool {
-    true
+impl Default for Config {
+    fn default() -> Self {
+        // Reached when there is no config to read, or none that could be used.
+        // Something has to be drawn or the bar looks like it failed to start,
+        // so this is the one place the starter modules are assumed.
+        let bar = Bar {
+            modules_left: vec![String::from("workspaces")],
+            modules_center: vec![String::from("clock")],
+            ..Bar::default()
+        };
+
+        Self {
+            bars: vec![bar],
+            module: Modules::default(),
+            trusted: true,
+            path: None,
+            problem: None,
+        }
+    }
+}
+
+impl Config {
+    /// The settings that belong to the process rather than to one bar. iced
+    /// picks a default font once for the whole runtime, so the first bar's
+    /// choice is the only one that can be honoured.
+    pub fn first(&self) -> Bar {
+        self.bars.first().cloned().unwrap_or_default()
+    }
+}
+
+/// What a config file actually holds. Generic over the shape of `bar` so the
+/// single-table and array-of-tables forms can share one definition -- and so
+/// both are parsed straight from the text, keeping the line numbers that
+/// deserialising through `toml::Value` would throw away.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct Raw<B: Default> {
+    bar: B,
+    module: Modules,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Bar {
+    /// Which monitor to put this bar on, named as the compositor names it
+    /// (`eDP-1`, `HDMI-A-1`). Unset puts it on every monitor, and follows one
+    /// being plugged in.
+    pub output: Option<String>,
     pub position: Position,
     pub height: u32,
     /// Top, right, bottom, left.
@@ -109,6 +149,7 @@ impl Bar {
 impl Default for Bar {
     fn default() -> Self {
         Self {
+            output: None,
             position: Position::default(),
             height: 32,
             margin: [0; 4],
@@ -118,8 +159,12 @@ impl Default for Bar {
             vertical_align: VerticalAlign::default(),
             font: None,
             font_size: 16.0,
-            modules_left: vec![String::from("workspaces")],
-            modules_center: vec![String::from("clock")],
+            // Empty, so a `[[bar]]` that names only the modules it wants gets
+            // only those. The starter set belongs to having no config at all,
+            // and lives in `Config::default` instead: inherited per bar it
+            // would put a clock and a set of workspaces on every one of them.
+            modules_left: Vec::new(),
+            modules_center: Vec::new(),
             modules_right: Vec::new(),
             row: Vec::new(),
             style: Style::default(),
@@ -176,6 +221,45 @@ pub struct Style {
     /// follow `font-size`, which is why it is separate: a picture has no font
     /// to take its size from.
     pub icon_size: f32,
+    /// The face to draw text in, already resolved from the module's `font`, the
+    /// bar's, and the process default in that order. Not a `[bar.style]` key:
+    /// `font` is written on the bar or the module, and the answer is worked out
+    /// before a module is ever asked to draw.
+    #[serde(skip)]
+    pub font: Option<iced::Font>,
+    /// Text size, resolved the same way.
+    #[serde(skip, default = "default_font_size")]
+    pub font_size: f32,
+}
+
+fn default_font_size() -> f32 {
+    16.0
+}
+
+/// The `iced::Font` for a family name, or `None` for the process default.
+///
+/// `Font` borrows its family for `'static` and the name comes from a file read
+/// at runtime, so it has to be leaked. Every distinct name is leaked once and
+/// reused, which matters because a reload asks again for the same names.
+pub fn typeface(family: Option<&str>) -> Option<iced::Font> {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+
+    static SEEN: OnceLock<Mutex<HashMap<String, &'static str>>> = OnceLock::new();
+
+    let family = family?;
+    let mut seen = SEEN.get_or_init(Default::default).lock().ok()?;
+
+    let name = match seen.get(family) {
+        Some(name) => *name,
+        None => {
+            let name: &'static str = String::leak(family.to_owned());
+            seen.insert(family.to_owned(), name);
+            name
+        }
+    };
+
+    Some(iced::Font::with_name(name))
 }
 
 impl Default for Style {
@@ -191,6 +275,8 @@ impl Default for Style {
             border_width: 0.0,
             border_radius: 0.0,
             icon_size: 18.0,
+            font: None,
+            font_size: default_font_size(),
         }
     }
 }
@@ -225,6 +311,11 @@ pub struct Sensor {
     pub icons: Vec<String>,
     /// Overrides `[bar.style] icon-size` for this module alone.
     pub icon_size: Option<f32>,
+    /// Draw this module in a face of its own, overriding the bar's `font`. For
+    /// an icon that lives in a family the rest of the bar does not use.
+    pub font: Option<String>,
+    /// Text size for this module alone, overriding the bar's `font-size`.
+    pub font_size: Option<f32>,
     /// Text colours, lowest level first, chosen the same way as `icons`:
     /// green, amber, red reads as fine, busy, struggling. Empty uses
     /// `foreground`.
@@ -247,6 +338,8 @@ impl Default for Sensor {
             format: String::from("{icon} {value}"),
             icons: Vec::new(),
             icon_size: None,
+            font: None,
+            font_size: None,
             colors: Vec::new(),
             interval: 5,
             on_scroll_up: None,
@@ -305,6 +398,10 @@ pub struct Custom {
     pub icons: Vec<String>,
     /// Overrides `[bar.style] icon-size` for this module alone.
     pub icon_size: Option<f32>,
+    /// Draw this module in a face of its own, overriding the bar's `font`.
+    pub font: Option<String>,
+    /// Text size for this module alone, overriding the bar's `font-size`.
+    pub font_size: Option<f32>,
     /// Text colours, chosen the same way as `icons`.
     pub colors: Vec<Rgba>,
     /// Shown on hover, unless the command prints its own.
@@ -341,6 +438,8 @@ impl Default for Custom {
             format: String::from("{icon}{value}"),
             icons: Vec::new(),
             icon_size: None,
+            font: None,
+            font_size: None,
             colors: Vec::new(),
             tooltip: None,
             on_click: None,
@@ -507,11 +606,36 @@ pub fn load(named: Option<PathBuf>) -> Config {
 /// the first-run and fall-back-to-defaults behaviour that only makes sense at
 /// startup.
 pub fn parse(path: &Path, text: &str) -> Result<Config, String> {
-    let mut config: Config = toml::from_str(text).map_err(|error| error.to_string())?;
+    // `[bar]` and `[[bar]]` are one key with two shapes, so which struct to
+    // parse into has to be settled before parsing. Deciding it here, from a
+    // throwaway untyped pass, means the real parse is still done straight from
+    // the text and its errors still carry a line and column.
+    let array = toml::from_str::<toml::Value>(text)
+        .ok()
+        .and_then(|value| value.get("bar").map(toml::Value::is_array))
+        .unwrap_or(false);
 
-    config.trusted = trustworthy(path);
-    config.path = Some(path.to_path_buf());
-    Ok(config)
+    let (bars, module) = if array {
+        let raw: Raw<Vec<Bar>> = toml::from_str(text).map_err(|error| error.to_string())?;
+        (raw.bar, raw.module)
+    } else {
+        let raw: Raw<Bar> = toml::from_str(text).map_err(|error| error.to_string())?;
+        (vec![raw.bar], raw.module)
+    };
+
+    // `[[bar]]` written once and then emptied would otherwise leave a running
+    // process with nothing to draw and no way to say why.
+    if bars.is_empty() {
+        return Err(String::from("no bars: [[bar]] is present but empty"));
+    }
+
+    Ok(Config {
+        bars,
+        module,
+        trusted: trustworthy(path),
+        path: Some(path.to_path_buf()),
+        problem: None,
+    })
 }
 
 /// Read and parse a config file that is already known to exist.
@@ -524,33 +648,24 @@ pub fn reread(path: &Path) -> Result<Config, String> {
 
 /// Which settings differ that cannot be changed on a running bar.
 ///
-/// The layer surface's size, position and margin are settled when it is
-/// created, and the default font is chosen once for the process. A reload that
-/// alters one of them cannot be applied, and applying the rest would leave the
-/// bar drawing something its surface is the wrong shape for.
+/// Only the two that belong to the process rather than to a surface are left:
+/// iced chooses the default font and text size once for the whole runtime.
+/// Position, margin, height and exclusivity used to be here too, and stopped
+/// being fixed when surfaces started being created at runtime — a reload
+/// rebuilds them.
 pub fn fixed_differences(current: &Config, next: &Config) -> Vec<&'static str> {
-    let mut changed = Vec::new();
+    // Only one thing is left, and it is narrow: a bar that names no `font` at
+    // all falls back to the family iced was started with, and that one is
+    // chosen once. Naming a font, changing it, or changing a size all reload,
+    // because those are resolved every time a module is drawn. Taking the last
+    // `font` key out of a config does not.
+    let (current, next) = (current.first(), next.first());
 
-    if current.bar.position != next.bar.position {
-        changed.push("position");
-    }
-    if current.bar.margin != next.bar.margin {
-        changed.push("margin");
-    }
-    if current.bar.exclusive != next.bar.exclusive {
-        changed.push("exclusive");
-    }
-    if current.bar.total_height() != next.bar.total_height() {
-        changed.push("height");
-    }
-    if current.bar.font != next.bar.font {
-        changed.push("font");
-    }
-    if current.bar.font_size != next.bar.font_size {
-        changed.push("font-size");
+    if current.font.is_some() && next.font.is_none() {
+        return vec!["font"];
     }
 
-    changed
+    Vec::new()
 }
 
 /// Whether shell commands in this config may be run.

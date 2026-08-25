@@ -1,6 +1,7 @@
 use iced::widget::{button, row, text};
 use iced::{Element, Subscription, Task};
 
+use super::icon::faced;
 use super::{Event, Module};
 use crate::compositor::{self, Compositor, Workspace};
 use crate::config;
@@ -73,7 +74,7 @@ fn pill(workspace: &Workspace, style: config::Style) -> Element<'_, Event> {
     let visible = workspace.visible;
     let occupied = workspace.windows > 0;
 
-    button(text(workspace.name.as_str()))
+    button(faced(text(workspace.name.as_str()), style))
         .padding([2, 8])
         .on_press(Event::FocusWorkspace(workspace.id))
         .style(move |_theme, _status| button::Style {

@@ -271,10 +271,45 @@ mod tests {
             .replace(MODULES, &lists())
             .replace(SCRIPTS_DIR, "/home/someone/.config/ricebar/scripts");
 
-        let config: super::super::Config =
-            toml::from_str(&text).expect("the starter config must parse");
+        let config = super::super::parse(Path::new("/dev/null"), &text)
+            .expect("the starter config must parse");
 
-        assert!(config.bar.modules_center.iter().any(|name| name == "clock"));
+        let bar = config.bars.first().expect("a config describes a bar");
+        assert!(bar.modules_center.iter().any(|name| name == "clock"));
+    }
+
+    /// The two shapes a config's `bar` key can take. Written as `[bar]` it is
+    /// one bar; written as `[[bar]]` it is a list, and the single form has to
+    /// keep working because that is what first run writes.
+    #[test]
+    fn a_bar_may_be_one_table_or_several() {
+        let one = super::super::parse(
+            Path::new("/dev/null"),
+            "[bar]\nheight = 30\nmodules-left = [\"clock\"]\n",
+        )
+        .expect("a single [bar] must parse");
+
+        assert_eq!(one.bars.len(), 1);
+        assert_eq!(one.bars[0].height, 30);
+        assert_eq!(one.bars[0].output, None);
+
+        let many = super::super::parse(
+            Path::new("/dev/null"),
+            "[[bar]]\noutput = \"eDP-1\"\nheight = 30\n\n[[bar]]\noutput = \"HDMI-A-1\"\nposition = \"bottom\"\n",
+        )
+        .expect("an array of [[bar]] must parse");
+
+        assert_eq!(many.bars.len(), 2);
+        assert_eq!(many.bars[0].output.as_deref(), Some("eDP-1"));
+        assert_eq!(many.bars[1].output.as_deref(), Some("HDMI-A-1"));
+        assert_eq!(many.bars[1].position, super::super::Position::Bottom);
+    }
+
+    /// A running bar with no surfaces at all would look like a crash.
+    #[test]
+    fn an_empty_bar_list_is_an_error() {
+        let empty = super::super::parse(Path::new("/dev/null"), "bar = []\n");
+        assert!(empty.is_err(), "an empty bar list must be refused");
     }
 
     #[test]

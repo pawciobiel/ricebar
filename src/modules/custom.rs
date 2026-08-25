@@ -22,6 +22,7 @@ use iced::{Element, Length, Subscription, Task};
 use serde::Deserialize;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
+use super::icon::faced;
 use super::{
     Content, Direction, Entry, Event, Icon, Module, Popup, color_for, icon_for, labelled, spawn,
 };
@@ -271,13 +272,22 @@ impl Module for Custom {
         // other renders its icon as a widget, which is what lets it be a
         // picture rather than a glyph.
         let label: Element<'_, Event> = match &self.ticker {
-            Some(ticker) => text(self.scrolled(ticker)).color(foreground).into(),
+            Some(ticker) => {
+                let drawn = text(self.scrolled(ticker))
+                    .color(foreground)
+                    .size(style.font_size);
+                match style.font {
+                    Some(font) => drawn.font(font).into(),
+                    None => drawn.into(),
+                }
+            }
             None => labelled(
                 &self.format,
                 self.icon(),
                 self.value(),
                 foreground,
                 self.icon_size.unwrap_or(style.icon_size),
+                style,
             ),
         };
 
@@ -359,30 +369,31 @@ impl Module for Custom {
         };
 
         let rows = entries.iter().enumerate().map(|(index, entry)| {
-            button(text(entry.label.as_str()).wrapping(text::Wrapping::None))
-                .width(Length::Fill)
-                .padding([2, 6])
-                .on_press(Event::Activate(index))
-                .style(move |_theme, status| button::Style {
-                    background: match status {
-                        button::Status::Hovered | button::Status::Pressed => {
-                            Some(style.accent.color().into())
-                        }
-                        _ => None,
-                    },
-                    text_color: match status {
-                        button::Status::Hovered | button::Status::Pressed => {
-                            style.background.color()
-                        }
-                        _ => style.foreground.color(),
-                    },
-                    border: iced::Border {
-                        radius: 4.into(),
-                        ..Default::default()
-                    },
+            button(faced(
+                text(entry.label.as_str()).wrapping(text::Wrapping::None),
+                style,
+            ))
+            .width(Length::Fill)
+            .padding([2, 6])
+            .on_press(Event::Activate(index))
+            .style(move |_theme, status| button::Style {
+                background: match status {
+                    button::Status::Hovered | button::Status::Pressed => {
+                        Some(style.accent.color().into())
+                    }
+                    _ => None,
+                },
+                text_color: match status {
+                    button::Status::Hovered | button::Status::Pressed => style.background.color(),
+                    _ => style.foreground.color(),
+                },
+                border: iced::Border {
+                    radius: 4.into(),
                     ..Default::default()
-                })
-                .into()
+                },
+                ..Default::default()
+            })
+            .into()
         });
 
         column(rows).spacing(2).into()

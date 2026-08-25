@@ -10,6 +10,7 @@ use iced_layershell::reexport::{
 };
 use iced_layershell::to_layer_message;
 
+use crate::compositor;
 use crate::config;
 use crate::modules::{self, Direction, Event, Module};
 
@@ -17,9 +18,20 @@ use crate::modules::{self, Direction, Event, Module};
 pub struct Bar {
     config: config::Config,
     /// Every enabled module, in one flat list so a single index identifies one.
+    /// Shared across bars: a module named by two of them is built once and
+    /// drawn twice, so one script feeds both rather than running twice.
     modules: Vec<Box<dyn Module>>,
-    /// One entry per line of the bar, stacked top to bottom.
-    rows: Vec<Row>,
+    /// One entry per `[[bar]]` in the config.
+    layouts: Vec<Layout>,
+    /// What each module asked to be drawn in, parallel to `modules`. Kept here
+    /// rather than in the module because resolving it needs the bar as well.
+    typography: Vec<(Option<iced::Font>, Option<f32>)>,
+    /// Which layout each live surface is drawing, and where. An id that is not
+    /// in here belongs to nothing and is drawn empty.
+    surfaces: HashMap<window::Id, Surface>,
+    /// The monitors the compositor last said it had. Empty means nobody could
+    /// say, and each bar is then placed wherever the compositor likes.
+    outputs: Vec<String>,
     /// The hover popup, when one is open.
     popup: Option<Popup>,
     /// The module the pointer is currently inside.
@@ -44,12 +56,27 @@ pub struct Bar {
     generation: u64,
 }
 
-/// One line of the bar, holding indices into `modules`.
+/// One `[[bar]]`: its own geometry, style and lines.
+struct Layout {
+    config: config::Bar,
+    rows: Vec<Row>,
+    /// The bar's own face, which its modules inherit unless they name one.
+    font: Option<iced::Font>,
+}
+
+/// One line of a bar, holding indices into `modules`.
 struct Row {
     height: u32,
     left: Vec<usize>,
     center: Vec<usize>,
     right: Vec<usize>,
+}
+
+/// A live layer surface: the layout it draws, and the monitor it is on.
+struct Surface {
+    layout: usize,
+    /// `None` when the compositor chose the monitor rather than us.
+    output: Option<String>,
 }
 
 struct Popup {
@@ -79,18 +106,42 @@ const POPUP_GRACE: Duration = Duration::from_millis(120);
 impl Bar {
     pub fn new(config: config::Config) -> Self {
         let mut modules = Vec::new();
+        let mut typography = Vec::new();
+        // Names already built, so a module two bars both ask for is one module
+        // drawn in two places rather than two scripts doing the same work.
+        let mut built = HashMap::new();
 
         let trusted = config.trusted;
 
-        let rows: Vec<Row> = config
-            .bar
-            .rows()
-            .into_iter()
-            .map(|line| Row {
-                height: line.height.unwrap_or(config.bar.height),
-                left: region(&mut modules, &line.modules_left, &config.module, trusted),
-                center: region(&mut modules, &line.modules_center, &config.module, trusted),
-                right: region(&mut modules, &line.modules_right, &config.module, trusted),
+        let layouts: Vec<Layout> = config
+            .bars
+            .iter()
+            .map(|bar| {
+                let mut line = |names: &[String]| {
+                    region(
+                        &mut modules,
+                        &mut typography,
+                        &mut built,
+                        names,
+                        &config.module,
+                        trusted,
+                    )
+                };
+
+                Layout {
+                    font: config::typeface(bar.font.as_deref()),
+                    rows: bar
+                        .rows()
+                        .into_iter()
+                        .map(|row| Row {
+                            height: row.height.unwrap_or(bar.height),
+                            left: line(&row.modules_left),
+                            center: line(&row.modules_center),
+                            right: line(&row.modules_right),
+                        })
+                        .collect(),
+                    config: bar.clone(),
+                }
             })
             .collect();
 
@@ -98,13 +149,21 @@ impl Bar {
             eprintln!("ricebar: no modules enabled; check the modules-* lists in config");
         } else {
             let names: Vec<&str> = modules.iter().map(|module| module.name()).collect();
-            eprintln!("ricebar: {} module(s): {}", names.len(), names.join(", "));
+            eprintln!(
+                "ricebar: {} bar(s), {} module(s): {}",
+                layouts.len(),
+                names.len(),
+                names.join(", ")
+            );
         }
 
         let mut bar = Self {
             config,
             modules,
-            rows,
+            typography,
+            layouts,
+            surfaces: HashMap::new(),
+            outputs: Vec::new(),
             popup: None,
             hovered: None,
             scrolled: HashMap::new(),
@@ -138,10 +197,14 @@ impl Bar {
                 self.modules.push(notice);
                 self.notice = Some(index);
 
-                // The end of the first line, which is where the eye goes and
-                // where a bar of any shape has something visible.
-                if let Some(first) = self.rows.first_mut() {
-                    first.right.push(index);
+                // On every bar, at the end of its first line: the config is
+                // wrong for the process, not for one surface, and putting it
+                // on only the first would hide it whenever that bar is the one
+                // that could not be placed.
+                for layout in &mut self.layouts {
+                    if let Some(first) = layout.rows.first_mut() {
+                        first.right.push(index);
+                    }
                 }
             }
         }
@@ -149,8 +212,13 @@ impl Bar {
 }
 
 /// Build one region's modules, returning their indices into the flat list.
+///
+/// A name already built is reused rather than built again, so naming `stocks`
+/// on two bars runs one script and draws its output in both places.
 fn region(
     modules: &mut Vec<Box<dyn Module>>,
+    typography: &mut Vec<(Option<iced::Font>, Option<f32>)>,
+    built: &mut HashMap<String, usize>,
     names: &[String],
     config: &config::Modules,
     trusted: bool,
@@ -158,10 +226,19 @@ fn region(
     let mut indices = Vec::new();
 
     for name in names {
+        if let Some(&index) = built.get(name) {
+            indices.push(index);
+            continue;
+        }
+
         match modules::build(name, config, trusted) {
             Some(module) => {
-                indices.push(modules.len());
+                let index = modules.len();
+                let (font, size) = modules::typography(name, config);
                 modules.push(module);
+                typography.push((config::typeface(font.as_deref()), size));
+                built.insert(name.clone(), index);
+                indices.push(index);
             }
             None => eprintln!("ricebar: unknown module `{name}`, ignoring"),
         }
@@ -187,7 +264,16 @@ pub enum Message {
     Scroll(usize, iced::mouse::ScrollDelta),
     /// The config file was written to.
     ConfigChanged,
+    /// The monitors the compositor has, as it last reported them.
+    Outputs(Vec<String>),
+    /// Build and remove surfaces so they match the monitors and the config.
+    Place,
 }
+
+/// How long to let a monitor settle before building a bar on it. Long enough
+/// for a `wl_output` to arrive after the compositor announced the monitor,
+/// short enough not to be seen.
+const SETTLE: Duration = Duration::from_millis(400);
 
 /// How far a touchpad must travel to count as one notch of a wheel.
 const PIXELS_PER_NOTCH: f32 = 40.0;
@@ -228,12 +314,19 @@ pub fn subscription(bar: &Bar) -> Subscription<Message> {
             .map(|((_, index), event)| Message::Module(index, event))
     }));
 
+    // Bars are placed on monitors from this, so it runs whether or not a
+    // workspaces module asked for a compositor.
+    let outputs = compositor::outputs(bar.config.module.workspaces.compositor)
+        .with(generation)
+        .map(|(_, outputs)| Message::Outputs(outputs));
+
     let Some(path) = bar.config.path.clone() else {
-        return modules;
+        return Subscription::batch([modules, outputs]);
     };
 
     Subscription::batch([
         modules,
+        outputs,
         Subscription::run_with(path, watch).map(|()| Message::ConfigChanged),
     ])
 }
@@ -300,6 +393,157 @@ fn leave(bar: &mut Bar, index: usize) -> Task<Message> {
     close_popup(bar)
 }
 
+/// Where every bar wants a surface, given the monitors that exist.
+///
+/// An empty monitor list means nobody could tell us what there is, which
+/// happens without a compositor backend. Every bar then gets one surface and
+/// the compositor decides where to put it.
+fn wanted(bar: &Bar) -> Vec<(usize, Option<String>)> {
+    let mut places = Vec::new();
+
+    for (index, layout) in bar.layouts.iter().enumerate() {
+        match &layout.config.output {
+            Some(name) if bar.outputs.is_empty() => {
+                // Named, but there is no list to check it against. Asking for
+                // it by name is still right: layershellev looks the name up in
+                // its own list of outputs, which it always has.
+                places.push((index, Some(name.clone())));
+            }
+            Some(name) if bar.outputs.iter().any(|output| output == name) => {
+                places.push((index, Some(name.clone())));
+            }
+            // A name that matches nothing resolves to "let the compositor
+            // choose", which would silently stack this bar on top of another.
+            // Draw nothing instead; `place` says why.
+            Some(_) => {}
+            None if bar.outputs.is_empty() => places.push((index, None)),
+            None => places.extend(
+                bar.outputs
+                    .iter()
+                    .map(|output| (index, Some(output.clone()))),
+            ),
+        }
+    }
+
+    // Every bar named a monitor that is not there, so refusing them all would
+    // leave nothing on screen and no way to find out why -- a typo in `output`
+    // would look exactly like a bar that failed to start. Put the first one
+    // wherever the compositor likes; it carries the warning saying so.
+    if places.is_empty() && !bar.layouts.is_empty() {
+        places.push((0, None));
+    }
+
+    places
+}
+
+/// Create and destroy surfaces so the live ones match [`wanted`].
+fn place(bar: &mut Bar) -> Task<Message> {
+    let places = wanted(bar);
+
+    let missing: Vec<&str> = bar
+        .layouts
+        .iter()
+        .filter_map(|layout| layout.config.output.as_deref())
+        .filter(|name| !bar.outputs.is_empty() && !bar.outputs.iter().any(|output| output == name))
+        .collect();
+
+    if !missing.is_empty() {
+        let detail = format!(
+            "No monitor named {}.\nThis machine has {}.",
+            missing.join(", "),
+            bar.outputs.join(", ")
+        );
+        eprintln!("ricebar: {}", detail.replace('\n', " "));
+        bar.warn(detail);
+    }
+
+    let mut tasks = Vec::new();
+
+    // Anything on a monitor that has gone, or belonging to a bar the config no
+    // longer has. Dropping it from the map is what makes `view` draw nothing
+    // into it while the surface is on its way out.
+    let stale: Vec<window::Id> = bar
+        .surfaces
+        .iter()
+        .filter(|(_, surface)| {
+            !places
+                .iter()
+                .any(|(layout, output)| *layout == surface.layout && *output == surface.output)
+        })
+        .map(|(id, _)| *id)
+        .collect();
+
+    for id in stale {
+        bar.surfaces.remove(&id);
+        tasks.push(Task::done(Message::RemoveWindow(id)));
+    }
+
+    for (layout, output) in places {
+        let held = bar
+            .surfaces
+            .values()
+            .any(|surface| surface.layout == layout && surface.output == output);
+
+        if held {
+            continue;
+        }
+
+        let Some(settings) = bar_settings(bar, layout, output.clone()) else {
+            continue;
+        };
+
+        let id = window::Id::unique();
+        bar.surfaces.insert(id, Surface { layout, output });
+        tasks.push(Task::done(Message::NewLayerShell { settings, id }));
+    }
+
+    Task::batch(tasks)
+}
+
+/// The layer surface one bar wants on one monitor.
+fn bar_settings(bar: &Bar, layout: usize, output: Option<String>) -> Option<NewLayerShellSettings> {
+    let config = &bar.layouts.get(layout)?.config;
+
+    let [top, right, bottom, left] = config.margin;
+    let height = config.total_height();
+
+    let edge = match config.position {
+        config::Position::Top => Anchor::Top,
+        config::Position::Bottom => Anchor::Bottom,
+    };
+
+    let exclusive_zone = if config.exclusive {
+        // A margin pushes the bar inwards, so the space to reserve is the bar
+        // plus whatever gap sits between it and the edge it is anchored to.
+        let gap = match config.position {
+            config::Position::Top => top,
+            config::Position::Bottom => bottom,
+        };
+        i32::try_from(height)
+            .unwrap_or(i32::MAX)
+            .saturating_add(gap.max(0))
+    } else {
+        0
+    };
+
+    Some(NewLayerShellSettings {
+        // Zero width fills the monitor, which is what anchoring to both sides
+        // asks for anyway.
+        size: Some((0, height)),
+        layer: Layer::Top,
+        anchor: edge | Anchor::Left | Anchor::Right,
+        exclusive_zone: Some(exclusive_zone),
+        margin: Some((top, right, bottom, left)),
+        // Defaults to OnDemand, which would let the bar steal focus.
+        keyboard_interactivity: KeyboardInteractivity::None,
+        output_option: output.map_or(OutputOption::Active, OutputOption::OutputName),
+        events_transparent: false,
+        // One namespace for every bar, so compositor rules written against it
+        // keep working whether the config describes one bar or four.
+        namespace: Some(namespace()),
+    })
+}
+
 /// Re-read the config and rebuild from it, or explain why it was not applied.
 fn reload(bar: &mut Bar) -> Task<Message> {
     let Some(path) = bar.config.path.clone() else {
@@ -337,6 +581,8 @@ fn reload(bar: &mut Bar) -> Task<Message> {
     let closed = close_popup(bar);
     let retiring = bar.retiring;
     let generation = bar.generation.wrapping_add(1);
+    let outputs = std::mem::take(&mut bar.outputs);
+    let surfaces = std::mem::take(&mut bar.surfaces);
 
     *bar = Bar::new(next);
 
@@ -344,9 +590,33 @@ fn reload(bar: &mut Bar) -> Task<Message> {
     // fall through to rendering the whole bar into it.
     bar.retiring = retiring;
     bar.generation = generation;
+    bar.outputs = outputs;
+    // Carried over so `place` can tell which surfaces already exist. Ones the
+    // new config has no use for are removed there, and geometry that changed
+    // is applied by tearing the surface down and building it again -- which is
+    // why position, margin, height and exclusivity are no longer frozen.
+    bar.surfaces = surfaces;
+
+    let placed = replace(bar);
 
     eprintln!("ricebar: reloaded {}", path.display());
-    closed
+    Task::batch([closed, placed])
+}
+
+/// Rebuild every surface, for a reload that may have changed their geometry.
+///
+/// A layer surface is sized and placed once, when it is created, so the only
+/// way to move one is to make a new one. Dropping them all first means `place`
+/// sees nothing to keep.
+fn replace(bar: &mut Bar) -> Task<Message> {
+    let old: Vec<window::Id> = bar.surfaces.keys().copied().collect();
+    bar.surfaces.clear();
+
+    let closed = old
+        .into_iter()
+        .map(|id| Task::done(Message::RemoveWindow(id)));
+
+    Task::batch(closed.chain(std::iter::once(place(bar))))
 }
 
 pub fn update(bar: &mut Bar, message: Message) -> Task<Message> {
@@ -460,6 +730,25 @@ pub fn update(bar: &mut Bar, message: Message) -> Task<Message> {
             leave(bar, index)
         }
         Message::ConfigChanged => reload(bar),
+        Message::Outputs(outputs) => {
+            if outputs == bar.outputs {
+                return Task::none();
+            }
+
+            bar.outputs = outputs;
+
+            // Not placed straight away. A monitor reaches us over the
+            // compositor's own socket before its `wl_output` reaches this
+            // client's Wayland connection, and a name the layer-shell runtime
+            // has not heard of yet resolves to "wherever you like" -- which
+            // puts the new bar on top of an existing one instead. Waiting lets
+            // the two agree on what exists.
+            Task::future(async {
+                tokio::time::sleep(SETTLE).await;
+                Message::Place
+            })
+        }
+        Message::Place => place(bar),
         // `to_layer_message` appends its own variants to this enum. Upstream's
         // example ends with `unreachable!()`, which is a panic waiting to happen.
         _ => Task::none(),
@@ -497,7 +786,7 @@ fn open_popup(bar: &mut Bar) -> Task<Message> {
     let id = window::Id::unique();
     // Text cannot be measured outside a renderer, so a tooltip's surface is
     // estimated from its longest line and how many lines there are.
-    let font_size = bar.config.bar.font_size;
+    let font_size = bar.config.first().font_size;
 
     let widest = tooltip
         .lines()
@@ -578,6 +867,15 @@ fn close_popup(bar: &mut Bar) -> Task<Message> {
     }
 }
 
+/// The first bar that draws this module, of however many do.
+fn holding(bar: &Bar, index: usize) -> Option<&Layout> {
+    bar.layouts.iter().find(|layout| {
+        layout.rows.iter().any(|row| {
+            row.left.contains(&index) || row.center.contains(&index) || row.right.contains(&index)
+        })
+    })
+}
+
 /// Build the surface for a tooltip or a module's own popup, at the given size.
 ///
 /// Both are layer surfaces rather than xdg popups. The runtime builds popups
@@ -593,29 +891,35 @@ fn popup_settings(
     let width = width.clamp(48.0, 720.0) as u32;
     let height = height.max(1.0) as u32;
 
+    // Whichever bar holds this module is the one the popup hangs from, and
+    // with several bars it is the one whose edge and margin apply.
+    let layout = holding(bar, index);
+    let config = layout.map_or_else(|| bar.config.first(), |layout| layout.config.clone());
+    let rows = layout.map(|layout| layout.rows.as_slice()).unwrap_or(&[]);
+
     // Anchor under the module's own region. A layer surface anchored to
     // neither side is centred on that axis, and one anchored to a side cannot
     // run off it -- so the tooltip stays on screen without the bar's width,
     // which layer surfaces never report.
-    let side = if bar.rows.iter().any(|row| row.left.contains(&index)) {
+    let side = if rows.iter().any(|row| row.left.contains(&index)) {
         Some(Anchor::Left)
-    } else if bar.rows.iter().any(|row| row.right.contains(&index)) {
+    } else if rows.iter().any(|row| row.right.contains(&index)) {
         Some(Anchor::Right)
     } else {
         None
     };
 
-    let [top, _, bottom, _] = bar.config.bar.margin;
+    let [top, _, bottom, _] = config.margin;
 
     // An exclusive bar already displaces the usable area, so the compositor
     // puts the tooltip directly below it. A non-exclusive one does not.
-    let clearance = if bar.config.bar.exclusive {
+    let clearance = if config.exclusive {
         0
     } else {
-        bar.config.bar.height as i32
+        config.total_height() as i32
     };
 
-    let (edge, margin) = match bar.config.bar.position {
+    let (edge, margin) = match config.position {
         config::Position::Top => (Anchor::Top, (top + clearance, 0, 0, 0)),
         config::Position::Bottom => (Anchor::Bottom, (0, 0, bottom + clearance, 0)),
     };
@@ -643,7 +947,23 @@ const TOOLTIP_LINE_RATIO: f32 = 1.4;
 const TOOLTIP_PADDING: f32 = 10.0;
 
 fn popup_view<'a>(bar: &'a Bar, popup: &'a Popup) -> Element<'a, Message> {
-    let style = bar.config.bar.style;
+    // The popup takes the palette of the bar it hangs from.
+    // A popup is drawn in the face of the module it hangs from, so a tooltip
+    // over a module in its own font is not suddenly in a different one.
+    let (font, size) = bar
+        .typography
+        .get(popup.module)
+        .copied()
+        .unwrap_or_default();
+
+    let style = holding(bar, popup.module).map_or_else(
+        || bar.config.first().style,
+        |layout| config::Style {
+            font: font.or(layout.font),
+            font_size: size.unwrap_or(layout.config.font_size),
+            ..layout.config.style
+        },
+    );
 
     let body: Element<'a, Message> = match &popup.kind {
         PopupKind::Tooltip => {
@@ -693,16 +1013,35 @@ pub fn view(bar: &Bar, id: window::Id) -> Element<'_, Message> {
         return popup_view(bar, popup);
     }
 
+    // A surface on its way out, whether a popup or a bar whose monitor has
+    // been unplugged, may still be asked to draw once more.
+    let Some(layout) = bar
+        .surfaces
+        .get(&id)
+        .and_then(|surface| bar.layouts.get(surface.layout))
+    else {
+        return space::horizontal().into();
+    };
+
     if bar.retiring == Some(id) {
         return space::horizontal().into();
     }
 
-    let style = bar.config.bar.style;
-    let spacing = bar.config.bar.spacing;
+    let style = layout.config.style;
+    let spacing = layout.config.spacing;
 
     let region = |indices: &[usize]| {
         row(indices.iter().filter_map(|&index| {
             let module = bar.modules.get(index)?;
+
+            // A module's own face wins, then the bar's, then whatever the
+            // process was started with.
+            let (font, size) = bar.typography.get(index).copied().unwrap_or_default();
+            let style = config::Style {
+                font: font.or(layout.font),
+                font_size: size.unwrap_or(layout.config.font_size),
+                ..style
+            };
 
             let element = module
                 .view(style)
@@ -720,7 +1059,7 @@ pub fn view(bar: &Bar, id: window::Id) -> Element<'_, Message> {
         .align_y(Alignment::Center)
     };
 
-    let lines = bar.rows.iter().map(|line| {
+    let lines = layout.rows.iter().map(|line| {
         // The sides take the width they need and the centre takes the slack.
         // Giving each region a fixed third instead centres the middle exactly,
         // but a side that outgrows its third is then drawn off the edge of the
@@ -738,14 +1077,14 @@ pub fn view(bar: &Bar, id: window::Id) -> Element<'_, Message> {
             .height(Length::Fixed(line.height as f32))
             // The row's own `align_y` only lines the modules up against each
             // other. Without this each line sits at the top of its own height.
-            .align_y(bar.config.bar.vertical_align)
+            .align_y(layout.config.vertical_align)
             .into()
     });
 
     container(column(lines))
         .width(Length::Fill)
         .height(Length::Fill)
-        .padding([0.0, bar.config.bar.padding])
+        .padding([0.0, layout.config.padding])
         .style(move |_theme| container::Style {
             background: Some(style.background.color().into()),
             border: Border {
@@ -764,6 +1103,6 @@ pub fn style(bar: &Bar, _theme: &iced::Theme) -> iced::theme::Style {
         // transparent. That is what lets border-radius round real corners
         // instead of cutting into an opaque rectangle.
         background_color: Color::TRANSPARENT,
-        text_color: bar.config.bar.style.foreground.color(),
+        text_color: bar.config.first().style.foreground.color(),
     }
 }

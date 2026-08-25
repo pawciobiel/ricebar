@@ -198,15 +198,11 @@ state a script cannot see.
       renderer and `window::resize_events()` never fires for layer surfaces.
       Deliberately over-wide: too narrow wraps and clips. A real fix probably
       needs `iced_graphics`' text measurement.
-- [ ] **Per-monitor bars.** *Nice to have* — every output currently shows the
-      same content, which matches waybar. `StartMode::AllScreens` exposes no
-      output identity: `WindowEvent` carries none and ids are `Id::unique()`.
-      The way round it is `StartMode::Background` plus
-      `Message::NewLayerShell { settings: NewLayerShellSettings {
-      output_option: OutputOption::OutputName(name), .. }, id }` with an id we
-      mint, keeping a `HashMap<window::Id, String>` of monitor names.
-      `view(bar, id)` then filters by monitor. Also means handling
-      `monitoradded`/`monitorremoved` ourselves.
+- [ ] **Per-monitor bars.** Every output currently shows the same content,
+      which matches waybar. Folded into *Several bars in one config* below —
+      pinning a bar to an output and running two bars from one file turned out
+      to be the same change, and doing them separately would mean building the
+      `window::Id` lookup twice.
 
 ## Untrusted input
 
@@ -244,14 +240,115 @@ bar or hand it an absurd surface to draw.
 
 ## Configuration, continued
 
-- [ ] **Several bars in one config.** Today a bar is one process anchored to
-      one edge, and a second edge means running ricebar twice with `--config`.
-      A `[[bar]]` array would let one process own several, each with its own
-      edge, height and rows. The runtime can already hold more than one
-      surface — that is how `StartMode::AllScreens` works, and
-      `Message::NewLayerShell` mints them on demand — so this is a question of
-      config shape and of `view` knowing which bar a `window::Id` belongs to,
-      the same lookup per-monitor bars need.
+- [x] **Several bars in one config.** Today a bar is
+      one process anchored to one edge of every output, and a second edge means
+      running ricebar twice with `--config`. One `[[bar]]` array replaces both
+      that and per-monitor bars, because they need the same lookup.
+
+      **Shape.** Module *definitions* stay global and each bar names the ones it
+      wants, so a bar is a placement rather than a container:
+
+      ```toml
+      [module.cpu]
+      format = "{icon} {value}"
+
+      [[module.custom]]
+      name = "stocks"
+      exec = "~/.config/ricebar/scripts/stocks.py"
+
+      [[bar]]
+      output = "eDP-1"                 # omit for every output
+      modules-left = ["workspaces"]
+      modules-right = ["cpu", "memory", "battery"]
+
+      [[bar]]
+      output = "HDMI-A-1"
+      height = 32
+      modules-center = ["clock"]
+      modules-right = ["stocks"]
+      ```
+
+      `[[bar.row]]` nests inside a `[[bar]]` unchanged.
+
+      **One module instance, drawn wherever it is named.** `Bar.modules` stays a
+      single `Vec` and each bar holds indices into it, which `region(&[usize])`
+      already expects. So `stocks` named by one bar is one script, and `clock`
+      named by both is one clock drawn twice — not two processes and two timers.
+      Hover state is the one thing that is per-module today and would want to
+      become per `(bar, module)`, or a tooltip opens on both bars at once.
+
+      **Compatibility.** `[bar]` as a single table keeps meaning exactly what it
+      means now, so every existing config — including the one first-run
+      writes — is untouched. A `#[serde(untagged)]` enum takes either form.
+
+      **Mechanism.** `StartMode::Background` so the runtime creates nothing by
+      itself, then one `Message::NewLayerShell { settings, id }` per bar with an
+      id we mint, and a `HashMap<window::Id, usize>` into the bar list. The
+      mapping is known by construction, which is what `AllScreens` cannot give
+      us: its ids are `Id::unique()` and no inbound event carries an output
+      (`iced_layershell::event::WindowEvent` is input, refresh, closed and theme
+      only). `NewLayerShellSettings` carries everything a bar needs — `size`,
+      `anchor`, `exclusive_zone`, `margin`, `layer`, `keyboard_interactivity`,
+      `output_option` and a per-bar `namespace`, which would also make
+      `hyprctl layers` name them.
+
+      **What it unlocks beyond the feature itself.** Four of the six settings a
+      reload currently refuses stop being frozen: `position`, `margin`,
+      `exclusive` and the total `height` are frozen only because
+      `LayerShellSettings` is baked into `Settings` once at startup, and a
+      surface built at runtime can be torn down and rebuilt. Only `font` and
+      `font-size` stay, being genuinely process-wide. Popups also get more
+      correct: they ask for `OutputOption::Active` today and let the compositor
+      choose, and with the map they can name the parent bar's output, so a menu
+      lands on the monitor it was clicked on whatever has focus.
+
+      **The cost.** Hotplug is currently free and would stop being so.
+      `StartMode::AllScreens` really does follow outputs — verified with
+      `hyprctl output create headless`, which adds a third bar in the running
+      process, and `hyprctl output remove`, which takes it away again. Under
+      `Background` an unpinned bar has to enumerate outputs itself. That is fine
+      for Hyprland, sway and niri, whose IPC we already speak and whose
+      `Workspace` already carries `monitor`, but under `compositor = "none"`
+      there is no output list and an unpinned bar would fall back to one surface
+      on the active output. Narrow, but a real regression, and it belongs in the
+      docs rather than in a bug report.
+
+      **The trap to design around.** An `OutputOption::OutputName` that matches
+      nothing resolves to `None`, and `None` means "compositor chooses"
+      (`layershellev` lib.rs:2618). A typo, or an output that is unplugged at
+      login, therefore puts that bar silently on top of another one rather than
+      failing. Unlike `StartMode::TargetScreen`, which has the same fallback but
+      resolves inside the runner, this happens at our own call site — so check
+      the name against the compositor's output list first and raise the same
+      in-bar notice a config parse error uses.
+
+      **Rough size.** Config parsing with the compatibility shim ~80 lines, the
+      surface map and per-bar `view` ~120, moving geometry out of `Settings`
+      ~40, rebuilding surfaces on reload ~60, output enumeration ~30 per
+      backend, plus `config.example.toml` and the README.
+
+      **Written and verified**, on a headless sway rig with two outputs of
+      different sizes — see the recipe in `CLAUDE.md`. Measured by decoding the
+      screenshots rather than by eye:
+
+      - `[bar]` and `[[bar]]` both parse; the single-table form is unchanged.
+      - A 1280x720 monitor with a 30px top bar and a 1920x1080 one with a 48px
+        bottom bar, from one config in one process.
+      - Plugging a monitor in gives it a bar (`#1e1e2e` fill and `#cdd6f4` text
+        in its top rows); unplugging takes it away.
+      - Editing `position` and `height` while running moves the bar from top to
+        bottom and resizes it: the top rows go back to wallpaper, the bottom 44
+        become bar. Turning one `[bar]` into two `[[bar]]` works the same way.
+      - A bar naming a monitor that is not there is refused, and the warning
+        triangle appears on the bar that *could* be placed.
+
+      **Do not test this against a live desktop session.** Presentation is
+      gated on `wl_surface.frame` callbacks, and a compositor whose output is
+      asleep or locked stops sending them: a surface created during that window
+      never gets its first callback and never paints, while surfaces that
+      already had content keep showing it. That looks exactly like a bug in this
+      feature, and cost most of a session before the screen turning itself off
+      was noticed as the cause.
 - [x] **Write a default config on first run.** Done, in
       `src/config/first_run.rs`. A missing config at the default location is
       taken as a first run: the directory is created, `config.default.toml` is
@@ -304,7 +401,8 @@ bar or hand it an absurd surface to draw.
       Nothing in the crate metadata is wasted if that changes: `Cargo.toml`
       keeps its description, keywords and `exclude`, and `publish = false`
       stops an accidental `cargo publish` rather than a deliberate one.
-- [ ] **`CLAUDE.md`** with build, lint and test commands for future sessions.
+- [x] **`CLAUDE.md`** with build, lint and test commands, the traps already hit,
+      and how to test against a live or nested session.
 
 ## Failure behaviour
 

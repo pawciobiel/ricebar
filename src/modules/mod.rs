@@ -183,6 +183,30 @@ pub trait Module {
     }
 }
 
+/// The face and size a module asked for, if it asked for either.
+///
+/// Only the modules that draw their own text carry these; `workspaces` and the
+/// clock's calendar follow the bar. Returned as written, since resolving them
+/// against the bar is the caller's job.
+pub fn typography(name: &str, config: &config::Modules) -> (Option<String>, Option<f32>) {
+    let sensor = |sensor: &config::Sensor| (sensor.font.clone(), sensor.font_size);
+
+    match name {
+        "cpu" => sensor(&config.cpu),
+        "memory" => sensor(&config.memory),
+        "temperature" => sensor(&config.temperature),
+        "battery" => sensor(&config.battery),
+        "backlight" => sensor(&config.backlight),
+        _ => config
+            .custom
+            .iter()
+            .find(|custom| custom.name == name)
+            .map_or((None, None), |custom| {
+                (custom.font.clone(), custom.font_size)
+            }),
+    }
+}
+
 /// Turn a name from config into a module.
 ///
 /// `trusted` says whether the config may be taken as a source of shell

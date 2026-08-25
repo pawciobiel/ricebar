@@ -47,6 +47,10 @@ impl Compositor for Niri {
             }
         })
     }
+
+    fn outputs(&self) -> Subscription<Vec<String>> {
+        Subscription::run(watch_outputs)
+    }
 }
 
 pub fn available() -> bool {
@@ -204,6 +208,68 @@ fn parse<T: for<'de> Deserialize<'de>>(value: Option<&Value>) -> Vec<T> {
         .cloned()
         .and_then(|value| serde_json::from_value(value).ok())
         .unwrap_or_default()
+}
+
+/// The outputs, taken from the same event stream the workspaces come from.
+///
+/// niri has an `Outputs` request, but every workspace names its output and
+/// there is always at least one per output, so the event stream already
+/// carries the answer -- and carries it again when a monitor is plugged in,
+/// which a one-shot request would not.
+fn watch_outputs() -> impl Stream<Item = Vec<String>> {
+    iced::stream::channel(4, async |mut output: mpsc::Sender<Vec<String>>| {
+        loop {
+            if let Err(error) = follow_outputs(&mut output).await {
+                eprintln!("ricebar: niri ipc: {error}");
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    })
+}
+
+async fn follow_outputs(sender: &mut mpsc::Sender<Vec<String>>) -> io::Result<()> {
+    let stream = connect().await?;
+    let mut stream = BufReader::new(stream);
+
+    stream.get_mut().write_all(b"\"EventStream\"\n").await?;
+
+    let mut state = State::default();
+    let mut sent: Vec<String> = Vec::new();
+    let mut lines = stream.lines();
+
+    while let Some(line) = lines.next_line().await? {
+        let Ok(event) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+
+        let Some((name, body)) = event.as_object().and_then(|event| event.iter().next()) else {
+            continue;
+        };
+
+        if !state.apply(name, body) {
+            continue;
+        }
+
+        let mut found: Vec<String> = state
+            .workspaces
+            .iter()
+            .filter_map(|workspace| workspace.output.clone())
+            .collect();
+        found.sort();
+        found.dedup();
+
+        // Workspace events far outnumber monitor ones, and every one of them
+        // would otherwise ask the bar to rebuild every surface it has.
+        if found != sent && !found.is_empty() {
+            sent = found.clone();
+
+            if sender.send(found).await.is_err() {
+                return Ok(());
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn watch() -> impl Stream<Item = Workspaces> {

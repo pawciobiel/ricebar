@@ -39,6 +39,10 @@ impl Compositor for Hyprland {
             }
         })
     }
+
+    fn outputs(&self) -> Subscription<Vec<String>> {
+        Subscription::run(watch_monitors)
+    }
 }
 
 pub fn available() -> bool {
@@ -78,6 +82,7 @@ struct RawWorkspace {
 
 #[derive(Deserialize)]
 struct RawMonitor {
+    name: String,
     focused: bool,
     #[serde(rename = "activeWorkspace")]
     active_workspace: RawActiveWorkspace,
@@ -117,6 +122,55 @@ async fn snapshot() -> io::Result<Workspaces> {
             windows: workspace.windows,
         })
         .collect())
+}
+
+async fn monitors() -> io::Result<Vec<String>> {
+    let raw = request("j/monitors").await?;
+    let monitors: Vec<RawMonitor> = serde_json::from_str(&raw).map_err(io::Error::other)?;
+    Ok(monitors.into_iter().map(|monitor| monitor.name).collect())
+}
+
+/// Events after which the monitor list is stale.
+fn changes_monitors(line: &str) -> bool {
+    let Some((event, _)) = line.split_once(">>") else {
+        return false;
+    };
+
+    matches!(
+        event,
+        "monitoradded" | "monitoraddedv2" | "monitorremoved" | "monitorremovedv2"
+    )
+}
+
+fn watch_monitors() -> impl Stream<Item = Vec<String>> {
+    iced::stream::channel(4, async |mut output: mpsc::Sender<Vec<String>>| {
+        loop {
+            if let Err(error) = follow_monitors(&mut output).await {
+                eprintln!("ricebar: hyprland ipc: {error}");
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    })
+}
+
+async fn follow_monitors(output: &mut mpsc::Sender<Vec<String>>) -> io::Result<()> {
+    let events = UnixStream::connect(socket_dir()?.join(".socket2.sock")).await?;
+    let mut lines = BufReader::new(events).lines();
+
+    if output.send(monitors().await?).await.is_err() {
+        return Ok(());
+    }
+
+    while let Some(line) = lines.next_line().await? {
+        if !changes_monitors(&line) {
+            continue;
+        }
+        if output.send(monitors().await?).await.is_err() {
+            return Ok(());
+        }
+    }
+
+    Ok(())
 }
 
 /// Events after which the snapshot is stale. Hyprland emits many more.

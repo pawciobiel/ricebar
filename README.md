@@ -55,11 +55,17 @@ Beyond those two:
 **The bar**
 
 - Top or bottom, any height, margins, border width, radius and per-module fills
+- **As many bars as you like, from one file.** `[[bar]]` describes each one,
+  with its own edge, size, palette, font and modules
+- **A font per bar, and per module**, so one module can come from an icon family
+  the rest of the bar does not use
+- **A bar can name the monitor it belongs on**, so the workspaces go on the
+  laptop and the ticker on the big screen
 - **More than one row.** `[[bar.row]]` stacks lines, each with its own left,
   centre and right, and its own height
-- Multiple monitors, and hotplug
+- Multiple monitors, and hotplug: plug one in and every bar without an `output`
+  appears on it
 - Reserves its own space, so nothing renders underneath it
-- Runs a second instance for a second edge
 
 **Built in**
 
@@ -72,6 +78,17 @@ Beyond those two:
 | `battery` | charge level, and a plug when it is on mains |
 | `backlight` | brightness, with the wheel to change it |
 | `[[module.menu]]` | a label that opens a list of commands — a power menu in six lines |
+
+<img src="docs/calendar.png" alt="The clock's calendar, open below the bar" align="right" width="280">
+
+The calendar is a real surface rather than a tooltip: click the clock and it
+opens below the bar, with arrows to step through the months, today in the
+`urgent` colour and ISO week numbers down the side. `on-click-day` runs a
+command for whichever day you click, with `{}` replaced by the date. Hovering
+the clock is separate and keeps its own `tooltip-format`, so a clock can have
+either, both or neither.
+
+<br clear="right">
 
 **From scripts, with no Rust**
 
@@ -107,6 +124,58 @@ follows the freedesktop convention rather than another config key: an svg named
 `*-symbolic.svg` is recoloured to follow the module's `colors`, so a memory
 icon turns amber under load; anything else keeps the colours it was drawn with,
 so a weather icon keeps its yellow sun.
+
+## More than one bar
+
+![Four ricebar bars: a floating rounded bar, a two-row dock, a square slab and a pill](docs/multi-bar.png)
+
+Four bars across two monitors, from one config file in one process. Top to
+bottom: a floating translucent bar and a two-row dock on the first monitor, then
+a square slab and a rounded pill on the second — each with its own edge, height,
+palette, corner radius and border.
+
+Every bar is a `[[bar]]` table. Module *definitions* stay global, and each bar
+names the ones it wants:
+
+```toml
+[[bar]]
+output = "eDP-1"                 # omit to appear on every monitor
+position = "top"
+height = 44
+margin = [12, 16, 0, 16]         # the gap that makes it float
+modules-left = ["workspaces"]
+modules-right = ["cpu", "memory", "battery"]
+
+[bar.style]
+background = "#1e1e2ecc"         # the last two digits are alpha
+border-color = "#89b4fa"
+border-width = 2
+border-radius = 22
+
+[[bar]]
+output = "HDMI-A-1"
+position = "bottom"
+exclusive = false                # windows pass under this one
+modules-center = ["stocks"]
+
+[module.cpu]                     # defined once, drawn on whichever bars name it
+colors = ["#a6e3a1", "#f9e2af", "#f38ba8"]
+```
+
+A module named by several bars is **built once and drawn several times**, so a
+clock on three bars is one clock and a script on two bars is one process.
+
+`output` takes the name the compositor uses — `hyprctl monitors`,
+`swaymsg -t get_outputs` or `niri msg outputs` will tell you. A name matching no
+monitor does not put that bar on some other one: it is left undrawn, and the
+bars that could be placed carry a warning naming the monitors that do exist.
+Undock a laptop and the bar meant for the external screen goes away rather than
+piling on top of the built-in one. The exception is a config whose *only* bar
+names a monitor that is not there — that one is drawn anyway, since a bar that
+is both invisible and silent is indistinguishable from one that failed to start.
+
+A single `[bar]` table still means one bar on every monitor, which is what the
+first run writes and what most people want.
 
 ## Install
 
@@ -170,7 +239,8 @@ spawn-at-startup "ricebar"
 ## Configuration
 
 `$XDG_CONFIG_HOME/ricebar/config.toml`, or `~/.config/ricebar/config.toml`.
-`-c <path>` reads another one, which is also how you run a second bar.
+`-c <path>` reads another one instead, for running a second, separate ricebar —
+several bars from the same file need no second process.
 
 Every option is documented in [`config.example.toml`](config.example.toml).
 A module runs only if it is named in a `modules-*` list, so deleting `"clock"`
@@ -192,13 +262,16 @@ on-scroll-up = "pactl set-sink-volume @DEFAULT_SINK@ +5%"
 
 ### Reloading
 
-Saving the config reloads the bar — modules, colours, formats, scripts and
-icons all change in place.
+Saving the config reloads the bar — modules, colours, formats, scripts, icons,
+and the shape and placement of the bars themselves. Move a bar from the top to
+the bottom, resize it, send it to another monitor, or turn one bar into three,
+and it happens as you save. A layer surface is sized and placed once when it is
+created, so ricebar builds new ones and drops the old.
 
-Six settings cannot: `position`, `margin`, `exclusive`, the total `height`,
-`font` and `font-size`. A layer surface is sized and placed once when it is
-created, and the font is chosen once for the process. Changing one of those is
-**refused whole** rather than half-applied, and the bar says so.
+One narrow case cannot: taking the last `font` key out of a config. A bar that
+names no font falls back to the family iced was started with, and that one is
+chosen once. Naming a font, changing it, or changing any size all reload, since
+those are resolved every time a module is drawn.
 
 A config that does not parse never reaches the bar. The running one keeps going,
 the parser error goes to stderr naming the line, and a warning triangle appears
@@ -293,7 +366,6 @@ Worth knowing before you switch:
   DBusMenu), and ricebar deliberately does not speak D-Bus. If you rely on
   apps that close to a tray icon, waybar or ironbar will serve you better.
 - **No media controls** or notification module, for the same reason.
-- **Every monitor shows the same thing.** Per-output content is planned.
 - **No icon themes by name yet** — icons are paths. `icon-theme = "candy-icons"`
   is on the list.
 - **Young.** Built over a few days and used daily by its author, which is not
