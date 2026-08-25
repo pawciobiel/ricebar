@@ -721,10 +721,15 @@ pub fn view(bar: &Bar, id: window::Id) -> Element<'_, Message> {
     };
 
     let lines = bar.rows.iter().map(|line| {
+        // The sides take the width they need and the centre takes the slack.
+        // Giving each region a fixed third instead centres the middle exactly,
+        // but a side that outgrows its third is then drawn off the edge of the
+        // screen -- and a bar that silently hides a module is worse than one
+        // whose clock sits a little off centre.
         let content = row![
-            container(region(&line.left)).width(Length::FillPortion(1)),
-            container(region(&line.center)).center_x(Length::FillPortion(1)),
-            container(region(&line.right)).align_right(Length::FillPortion(1)),
+            region(&line.left),
+            container(region(&line.center)).center_x(Length::Fill),
+            region(&line.right),
         ]
         .align_y(Alignment::Center);
 
