@@ -144,11 +144,11 @@ background = "#313244"
 # time, so ricebar starts one process instead of forking every interval. Its
 # icon is a Nerd Font weather glyph chosen from the condition text.
 #
-# Copy dev/scripts/weather.sh to ~/.config/ricebar/scripts/ first. Set
+# Copy dev/scripts/weather.py to ~/.config/ricebar/scripts/ first. Set
 # LOCATION in the command for a specific city; without one wttr.in guesses.
 [[module.custom]]
 name = "weather"
-exec = "LOCATION=Warsaw ~/.config/ricebar/scripts/weather.sh"
+exec = "LOCATION=Warsaw ~/.config/ricebar/scripts/weather.py"
 stream = true
 tooltip = "Fetching weather..."
 

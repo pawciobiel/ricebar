@@ -183,10 +183,10 @@ background = "#313244"
 # point it at an icon theme's status directory to use that instead, since the
 # names are the freedesktop ones:
 #
-#   exec = "ICONS=/usr/share/icons/Adwaita/symbolic/status @SCRIPTS@/weather.sh"
+#   exec = "ICONS=/usr/share/icons/Adwaita/symbolic/status @SCRIPTS@/weather.py"
 [[module.custom]]
 name = "weather"
-exec = "ICONS=@ICONS@ @SCRIPTS@/weather.sh"
+exec = "ICONS=@ICONS@ @SCRIPTS@/weather.py"
 stream = true
 tooltip = "Fetching weather..."
 

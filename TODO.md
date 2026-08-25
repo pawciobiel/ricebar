@@ -95,7 +95,7 @@ work does not have to be rediscovered.
       alongside the text, which outranks whatever `percentage` would have
       chosen. That is for the cases where the icon is not a level at all — a
       weather condition, a keyboard layout, whether something is connected.
-      `dev/scripts/weather.sh` does exactly this when `ICONS` is set.
+      `dev/scripts/weather.py` does exactly this when `ICONS` is set.
 
       A few weather icons ship in `dev/icons/weather/` and are written out on
       first run, because most distributions carry no weather icons at all and
@@ -278,9 +278,9 @@ bar or hand it an absurd surface to draw.
       | `volume.sh`        | `pactl` (PipeWire or PulseAudio)       |
       | `microphone.sh`    | `pactl` (PipeWire or PulseAudio)       |
       | `network.sh`       | `ip`, `iw`                             |
-      | `weather.sh`       | `curl`, and the network                |
       | `ticker.sh`        | `top`, `df`, `free`                    |
-      | `stocks.py`        | `python3` (no curl: it uses urllib)    |
+      | `weather.py`       | `python3`, and the network             |
+      | `stocks.py`        | `python3`, and the network             |
       | `windows-popup.py` | `python3`, and a compositor CLI        |
 
       Settled by writing the `modules-*` lists from what the machine has:

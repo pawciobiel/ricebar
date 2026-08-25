@@ -82,6 +82,6 @@ tooltip = "A png, which cannot be recoloured"
 # Weather with picture icons, chosen from the condition by the script.
 [[module.custom]]
 name = "weather"
-exec = "LOCATION='Lublin,Poland' ICONS=dev/icons/weather dev/scripts/weather.sh"
+exec = "LOCATION='Lublin,Poland' ICONS=dev/icons/weather dev/scripts/weather.py"
 stream = true
 tooltip = "Fetching weather..."

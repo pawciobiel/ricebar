@@ -74,7 +74,7 @@ const SCRIPTS: &[(&str, &str)] = &[
     ("stocks.py", include_str!("../../dev/scripts/stocks.py")),
     ("ticker.sh", include_str!("../../dev/scripts/ticker.sh")),
     ("volume.sh", include_str!("../../dev/scripts/volume.sh")),
-    ("weather.sh", include_str!("../../dev/scripts/weather.sh")),
+    ("weather.py", include_str!("../../dev/scripts/weather.py")),
     (
         "windows-popup.py",
         include_str!("../../dev/scripts/windows-popup.py"),
@@ -122,7 +122,7 @@ const CENTER: &[Offered] = &[Offered {
 const RIGHT: &[Offered] = &[
     Offered {
         name: "weather",
-        needs: &[Need::Program("curl")],
+        needs: &[Need::Program("python3")],
     },
     Offered {
         name: "volume",

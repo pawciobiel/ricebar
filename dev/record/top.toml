@@ -100,7 +100,7 @@ background = "#313244"
 
 [[module.custom]]
 name = "weather"
-exec = "LOCATION='Warsaw,Poland' ICONS=dev/icons/weather dev/scripts/weather.sh"
+exec = "LOCATION='Warsaw,Poland' ICONS=dev/icons/weather dev/scripts/weather.py"
 stream = true
 tooltip = "Fetching weather..."
 

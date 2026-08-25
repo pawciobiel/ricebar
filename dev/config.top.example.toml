@@ -133,7 +133,7 @@ scroll-speed = 3
 
 [[module.custom]]
 name = "weather"
-exec = "LOCATION=Lublin,Poland ~/.config/ricebar/scripts/weather.sh"
+exec = "LOCATION=Lublin,Poland ~/.config/ricebar/scripts/weather.py"
 stream = true
 tooltip = "Fetching weather..."
 
