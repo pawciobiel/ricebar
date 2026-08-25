@@ -30,9 +30,7 @@ MOST = 20
 
 def run(*command):
     try:
-        return subprocess.run(
-            command, capture_output=True, text=True, timeout=5
-        ).stdout
+        return subprocess.run(command, capture_output=True, text=True, timeout=5).stdout
     except (OSError, subprocess.SubprocessError):
         return ""
 
@@ -67,11 +65,9 @@ def sway():
     return [
         {
             "label": "{}  {}".format(
-                (
-                    w.get("app_id")
-                    or w.get("window_properties", {}).get("class")
-                    or "?"
-                )[:APP],
+                (w.get("app_id") or w.get("window_properties", {}).get("class") or "?")[
+                    :APP
+                ],
                 (w.get("name") or "")[:TITLE],
             ),
             "exec": "swaymsg [con_id={}] focus".format(w["id"]),
