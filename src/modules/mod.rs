@@ -36,6 +36,10 @@ pub enum Event {
     Content(Content),
     /// The user clicked a module that owns a popup.
     TogglePopup,
+    /// The bar took this module's popup away. Sent however it was closed, so a
+    /// module that tracks whether its own popup is open cannot drift out of
+    /// step with the surface that actually exists.
+    ClosePopup,
     /// The user chose the entry at this index, which closes the popup.
     Activate(usize),
     /// The user paged the popup's contents, which leaves it open.

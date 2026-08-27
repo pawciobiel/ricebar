@@ -223,15 +223,21 @@ impl Module for Custom {
                 self.showing = !self.showing;
 
                 if !self.showing {
-                    // Closing. Drop the entries so the next click fetches
-                    // again rather than showing what was true last time.
-                    self.entries = None;
+                    // Closing. The bar tears the surface down and answers with
+                    // `ClosePopup`, which is where the entries are dropped.
                     return Task::none();
                 }
 
                 // The surface cannot be sized until the script has answered,
                 // so the bar opens it when these come back, not on the click.
                 return Task::future(async move { Event::Entries(entries_from(&script).await) });
+            }
+            // The surface has gone, whoever closed it. Forgetting the entries
+            // as well is what makes the next click fetch again rather than
+            // opening on what was true last time, at last time's size.
+            Event::ClosePopup => {
+                self.showing = false;
+                self.entries = None;
             }
             Event::Activate(entry) => {
                 // Choosing an entry closes the popup, so forget it was open.
@@ -423,6 +429,9 @@ async fn entries_from(script: &str) -> Vec<Entry> {
     let run = tokio::process::Command::new("sh")
         .arg("-c")
         .arg(script)
+        // As in `execute`: the timeout drops this future, and a dropped
+        // `Child` goes on running.
+        .kill_on_drop(true)
         .output();
 
     let output = match tokio::time::timeout(Duration::from_secs(5), run).await {
@@ -539,6 +548,20 @@ fn run(source: &Source) -> impl Stream<Item = Event> + use<> {
     })
 }
 
+/// How the read of a streaming command's output came to an end.
+enum Ended {
+    /// Stdout closed, which for a stream means the command is finishing.
+    Stdout,
+    /// It printed something that was not UTF-8.
+    Unreadable,
+    /// The bar stopped listening.
+    Unread,
+}
+
+/// How long to give a command to exit once it has closed stdout, before
+/// treating it as one that is still running and stopping it.
+const REAPING: Duration = Duration::from_secs(2);
+
 /// Keep the command running, treating each line it prints as an update.
 ///
 /// Returns `Err` only when the receiver has gone, meaning the bar is done with
@@ -551,6 +574,10 @@ async fn follow(
         .arg("-c")
         .arg(command)
         .stdout(Stdio::piped())
+        // Dropping a `Child` leaves the process running, and this future is
+        // dropped whenever the subscription behind it goes -- a reload, or the
+        // module leaving the config.
+        .kill_on_drop(true)
         .spawn();
 
     let mut child = match child {
@@ -568,20 +595,66 @@ async fn follow(
     let mut lines = BufReader::new(stdout).lines();
     let mut said_anything = false;
 
-    while let Ok(Some(line)) = lines.next_line().await {
-        said_anything = true;
+    let ended = loop {
+        match lines.next_line().await {
+            Ok(Some(line)) => {
+                said_anything = true;
 
-        if output.send(Event::Content(parse(&line))).await.is_err() {
-            // Stop the command rather than leave it running unread.
-            let _ = child.start_kill();
-            return Err(());
+                if output.send(Event::Content(parse(&line))).await.is_err() {
+                    break Ended::Unread;
+                }
+            }
+            Ok(None) => break Ended::Stdout,
+            // Anything the command prints that is not UTF-8 ends the read
+            // here. Swallowing it would look exactly like the command exiting.
+            Err(error) => {
+                eprintln!("ricebar: `{command}` printed something unreadable: {error}");
+                break Ended::Unreadable;
+            }
         }
+    };
+
+    // Stdout closing is a command on its way out, so its status is there to be
+    // had -- and it is the only thing that says whether what it last printed
+    // can still be believed.
+    //
+    // The other two endings leave it running, and so does a command that
+    // closes stdout without exiting. Killing it is what stops the retry in
+    // `run` starting a second copy beside the first, one per cycle, forever.
+    // Awaiting either reaps it as well.
+    let status = match ended {
+        Ended::Stdout => match tokio::time::timeout(REAPING, child.wait()).await {
+            Ok(status) => status.ok(),
+            Err(_) => {
+                let _ = child.kill().await;
+                None
+            }
+        },
+        Ended::Unreadable | Ended::Unread => {
+            let _ = child.kill().await;
+            None
+        }
+    };
+
+    if matches!(ended, Ended::Unread) {
+        return Err(());
     }
 
     // A stream that keeps ending without printing is broken, not quiet, and
     // would otherwise leave the module blank forever while it retried.
     if !said_anything {
         let content = Content::error(String::from("the command ended without printing anything"));
+        return output.send(Event::Content(content)).await.map_err(|_| ());
+    }
+
+    // Printing and *then* failing is the dangerous one. Nothing else replaces
+    // what a stream last said, so without this the bar keeps showing it --
+    // indistinguishable from a healthy module with nothing new to report,
+    // while the command dies and restarts behind it.
+    if let Some(status) = status
+        && !status.success()
+    {
+        let content = Content::error(format!("printed, then {status}"));
         return output.send(Event::Content(content)).await.map_err(|_| ());
     }
 
@@ -595,6 +668,10 @@ async fn execute(command: &str, interval: Duration) -> Content {
     let run = tokio::process::Command::new("sh")
         .arg("-c")
         .arg(command)
+        // The timeout below drops this future, which on its own leaves the
+        // process running: a command that hangs would otherwise leave one
+        // behind every interval until nothing on the machine could fork.
+        .kill_on_drop(true)
         .output();
 
     let output = match tokio::time::timeout(deadline, run).await {
@@ -637,5 +714,72 @@ fn parse(line: &str) -> Content {
         failed: false,
         percentage: None,
         icon: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn windows() -> Custom {
+        Custom::new(
+            &config::Custom {
+                name: String::from("windows"),
+                popup: Some(String::from("true")),
+                ..config::Custom::default()
+            },
+            true,
+        )
+    }
+
+    fn entry(label: &str) -> Entry {
+        Entry {
+            label: String::from(label),
+            exec: String::new(),
+        }
+    }
+
+    /// Nothing here runs the tasks a module hands back; the state it keeps is
+    /// what these are about.
+    fn tell(module: &mut Custom, event: Event) {
+        let _ = module.update(event);
+    }
+
+    /// The bar closes popups for reasons the module never sees -- the clock's
+    /// calendar opening over the top of this one. Without being told, the
+    /// module reads its next click as the close that already happened, and the
+    /// popup takes two clicks to come back.
+    #[test]
+    fn a_popup_the_bar_closed_reopens_on_one_click() {
+        let mut module = windows();
+
+        tell(&mut module, Event::TogglePopup);
+        tell(&mut module, Event::Entries(vec![entry("a window")]));
+        assert!(module.popup().is_some(), "the entries are what open it");
+
+        tell(&mut module, Event::ClosePopup);
+        assert!(module.popup().is_none(), "nothing is left to draw");
+
+        tell(&mut module, Event::TogglePopup);
+        assert!(
+            module.showing,
+            "one click reopens it, rather than closing it"
+        );
+    }
+
+    /// Choosing an entry closes the popup too, and the popup's surface is
+    /// sized from the entries before it is drawn: opening on the last set
+    /// would show stale labels and clip any list longer than that one.
+    #[test]
+    fn choosing_an_entry_leaves_nothing_stale_behind() {
+        let mut module = windows();
+
+        tell(&mut module, Event::TogglePopup);
+        tell(&mut module, Event::Entries(vec![entry("a window")]));
+        tell(&mut module, Event::Activate(0));
+        tell(&mut module, Event::ClosePopup);
+
+        assert!(module.entries.is_none(), "the old entries are gone");
+        assert!(module.popup().is_none());
     }
 }

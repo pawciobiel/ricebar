@@ -858,12 +858,27 @@ fn show_popup(bar: &mut Bar, index: usize) -> Task<Message> {
 }
 
 fn close_popup(bar: &mut Bar) -> Task<Message> {
-    match bar.popup.take() {
-        Some(popup) => {
-            bar.retiring = Some(popup.id);
-            Task::done(Message::RemoveWindow(popup.id))
-        }
-        None => Task::none(),
+    let Some(popup) = bar.popup.take() else {
+        return Task::none();
+    };
+
+    bar.retiring = Some(popup.id);
+    let removed = Task::done(Message::RemoveWindow(popup.id));
+
+    match popup.kind {
+        // A module keeps its own idea of whether its popup is open, and the
+        // bar closes popups for reasons the module never hears about -- one
+        // belonging to another module opening over the top of it. Left
+        // untold, the module reads its next click as the close that already
+        // happened, and swallows it.
+        PopupKind::Module => Task::batch([
+            removed,
+            Task::done(Message::Module(popup.module, Event::ClosePopup)),
+        ]),
+        // Not a module's business, and a tooltip is closed to make room for
+        // the popup of the very module it belongs to -- which must not be
+        // told to forget what it is about to show.
+        PopupKind::Tooltip => removed,
     }
 }
 
