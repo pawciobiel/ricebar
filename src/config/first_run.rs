@@ -67,6 +67,14 @@ const WEATHER_ICONS: &[(&str, &str)] = &[
 
 const SCRIPTS: &[(&str, &str)] = &[
     (
+        "bluetooth-popup.py",
+        include_str!("../../dev/scripts/bluetooth-popup.py"),
+    ),
+    (
+        "bluetooth.sh",
+        include_str!("../../dev/scripts/bluetooth.sh"),
+    ),
+    (
         "microphone.sh",
         include_str!("../../dev/scripts/microphone.sh"),
     ),
@@ -123,6 +131,10 @@ const RIGHT: &[Offered] = &[
     Offered {
         name: "weather",
         needs: &[Need::Program("python3")],
+    },
+    Offered {
+        name: "bluetooth",
+        needs: &[Need::Program("bluetoothctl")],
     },
     Offered {
         name: "volume",

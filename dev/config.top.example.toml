@@ -13,6 +13,7 @@ font-size = 16
 modules-left = ["launcher", "keybindings", "windows", "workspaces", "keyboard", "stocks"]
 modules-center = ["clock", "weather"]
 modules-right = [
+    "bluetooth",
     "network",
     "volume",
     "cpu",
@@ -113,6 +114,19 @@ name = "windows"
 label = ""
 tooltip = "Open windows"
 popup = "~/.config/ricebar/scripts/windows-popup.py"
+
+# Bluetooth: the adapter's state, with what is connected named on hover and a
+# popup to toggle it and connect a paired device. Pairing needs an agent to answer the passkey
+# prompt, so the popup's last line opens blueman for that.
+[[module.custom]]
+name = "bluetooth"
+exec = "~/.config/ricebar/scripts/bluetooth.sh"
+stream = true
+popup = "~/.config/ricebar/scripts/bluetooth-popup.py"
+# Grey when off, normal when on, blue when something is connected -- picked by
+# the percentage the script reports.
+colors = ["#6c7086", "#cdd6f4", "#89b4fa"]
+background = "#313244"
 
 [[module.custom]]
 name = "network"

@@ -106,8 +106,8 @@ either, both or neither.
 | Icon by name | the script returns `"icon"`, a glyph or a path, for icons that are not a level |
 
 Examples ship with it and are written out on first run: volume, microphone,
-network, weather, a market ticker, and a window switcher that works out the
-compositor for itself.
+Bluetooth, network, weather, a market ticker, and a window switcher that works
+out the compositor for itself.
 
 **Icons**
 

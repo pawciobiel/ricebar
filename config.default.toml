@@ -171,6 +171,23 @@ on-scroll-up = "pactl set-sink-volume @DEFAULT_SINK@ +5%"
 on-scroll-down = "pactl set-sink-volume @DEFAULT_SINK@ -5%"
 background = "#313244"
 
+# Bluetooth: the adapter's state, with whatever is connected named on hover and
+# a popup to turn it on or off and connect a paired device. Pairing is left to a real
+# application -- it needs an agent to answer the passkey prompt -- so the last
+# line of the popup opens one.
+#
+# BlueZ will not power the adapter on while the radio is rfkill-blocked, and
+# only root can lift that: `rfkill unblock bluetooth`, once.
+[[module.custom]]
+name = "bluetooth"
+exec = "@SCRIPTS@/bluetooth.sh"
+stream = true
+popup = "@SCRIPTS@/bluetooth-popup.py"
+# Grey when off, normal when on, blue when something is connected -- picked by
+# the percentage the script reports.
+colors = ["#6c7086", "#cdd6f4", "#89b4fa"]
+background = "#313244"
+
 # The microphone, streamed the same way. This one picks its own glyph rather
 # than taking one from `icons`, because muted is not a level: an `icons` list is
 # indexed by percentage, so a quiet microphone would be drawn as a muted one.
