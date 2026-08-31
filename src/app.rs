@@ -32,6 +32,10 @@ pub struct Bar {
     /// The monitors the compositor last said it had. Empty means nobody could
     /// say, and each bar is then placed wherever the compositor likes.
     outputs: Vec<String>,
+    /// Whether that list has ever arrived. An empty list is an answer -- it is
+    /// the answer with no compositor backend -- and it looks exactly like the
+    /// list we start with, so without this the surfaces are never built.
+    told: bool,
     /// The hover popup, when one is open.
     popup: Option<Popup>,
     /// The module the pointer is currently inside.
@@ -164,6 +168,7 @@ impl Bar {
             layouts,
             surfaces: HashMap::new(),
             outputs: Vec::new(),
+            told: false,
             popup: None,
             hovered: None,
             scrolled: HashMap::new(),
@@ -591,6 +596,8 @@ fn reload(bar: &mut Bar) -> Task<Message> {
     bar.retiring = retiring;
     bar.generation = generation;
     bar.outputs = outputs;
+    // The list is already known, so the next one to arrive says nothing new.
+    bar.told = true;
     // Carried over so `place` can tell which surfaces already exist. Ones the
     // new config has no use for are removed there, and geometry that changed
     // is applied by tearing the surface down and building it again -- which is
@@ -731,10 +738,14 @@ pub fn update(bar: &mut Bar, message: Message) -> Task<Message> {
         }
         Message::ConfigChanged => reload(bar),
         Message::Outputs(outputs) => {
-            if outputs == bar.outputs {
+            // The first list always places the bars, even when it is empty --
+            // with no compositor backend it is empty and stays that way, and
+            // an early return here left such a bar with no surface at all.
+            if outputs == bar.outputs && bar.told {
                 return Task::none();
             }
 
+            bar.told = true;
             bar.outputs = outputs;
 
             // Not placed straight away. A monitor reaches us over the
@@ -1119,5 +1130,52 @@ pub fn style(bar: &Bar, _theme: &iced::Theme) -> iced::theme::Style {
         // instead of cutting into an opaque rectangle.
         background_color: Color::TRANSPARENT,
         text_color: bar.config.first().style.foreground.color(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Nothing here runs the tasks the bar hands back; the state it keeps is
+    /// what these are about.
+    fn tell(bar: &mut Bar, message: Message) {
+        let _ = update(bar, message);
+    }
+
+    /// With no compositor backend the output list is empty and stays empty --
+    /// which is the list the bar starts with. Reading that as "nothing
+    /// changed" left the bar with no surface at all, on every compositor
+    /// ricebar does not speak.
+    #[test]
+    fn an_empty_first_output_list_still_places_the_bar() {
+        let mut bar = Bar::new(config::Config::default());
+        assert!(bar.surfaces.is_empty());
+
+        tell(&mut bar, Message::Outputs(Vec::new()));
+        assert!(bar.told, "the first list is an answer, empty or not");
+
+        let _ = place(&mut bar);
+        assert_eq!(
+            bar.surfaces.len(),
+            1,
+            "one bar, wherever the compositor likes"
+        );
+    }
+
+    /// The same list arriving again is nothing new, and rebuilding surfaces
+    /// for it would tear down a bar the user is looking at.
+    #[test]
+    fn the_same_output_list_twice_changes_nothing() {
+        let mut bar = Bar::new(config::Config::default());
+
+        tell(&mut bar, Message::Outputs(vec![String::from("HEADLESS-1")]));
+        let _ = place(&mut bar);
+        let held: Vec<window::Id> = bar.surfaces.keys().copied().collect();
+
+        tell(&mut bar, Message::Outputs(vec![String::from("HEADLESS-1")]));
+        let _ = place(&mut bar);
+
+        assert_eq!(bar.surfaces.keys().copied().collect::<Vec<_>>(), held);
     }
 }
