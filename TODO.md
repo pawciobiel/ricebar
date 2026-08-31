@@ -151,6 +151,61 @@ work does not have to be rediscovered.
       moment something happens rather than polling. `percentage` in a script's
       JSON picks its glyph from `icons` in config, so the script reports a
       number and the look stays configurable. See `dev/scripts/volume.sh`.
+- [x] **Bluetooth.** Done as `dev/scripts/bluetooth.sh` and its popup, with no
+      Rust at all: the script shows the adapter's state as one glyph, coloured
+      grey, plain or blue by a percentage it reports, with the connected devices
+      named on hover. The popup turns the adapter on or off, connects or
+      disconnects each paired device, and holds a discovery scan open.
+
+      **Pairing is deliberately elsewhere.** It needs an agent to answer the
+      passkey prompt, which is a dialogue rather than a line in a menu, so the
+      popup's last entry opens blueman, overskride or blueberry — whichever is
+      installed. That also keeps the no-D-Bus rule: everything here goes
+      through `bluetoothctl`.
+
+      **Not NetworkManager.** NM covers Bluetooth *network* connections, PAN
+      and DUN tethering, and cannot pair a device at all. BlueZ is the layer.
+
+      Two things measured rather than assumed:
+
+      - **`bluetoothctl scan on` does not scan.** On its own it asks for
+        discovery and exits, and discovery stops with the client that asked —
+        `Discovering: no` a second later. `--timeout N scan on` is what holds
+        it open, so the popup uses that.
+      - **BlueZ refuses to power the adapter on while rfkill soft-blocks it**,
+        with `org.bluez.Error.Failed`, and `/dev/rfkill` is root-only, so
+        `rfkill unblock` cannot come from the bar. One `rfkill unblock
+        bluetooth` as root is needed first, and it persists where the rfkill
+        service saves state on stop. Worth saying in the config comments,
+        because a toggle that silently does nothing is the worst of both.
+
+- [x] **Bluetooth reacts to events, not a timer.** Powering the adapter takes
+      about 0.29s, measured, and the module polled every 5s -- so a toggle from
+      the popup looked like it had hung for up to five seconds. It now blocks on
+      `bluetoothctl --monitor` and reports in 0.29s, matching BlueZ itself.
+
+      Two things had to be learnt to get there:
+
+      - **`bluetoothctl` reads EOF on stdin as `quit`**, so with the stdin a bar
+        hands it the monitor exits before printing anything. The script holds
+        the write end of a fifo and gives the monitor a read-only handle, which
+        it blocks on instead. Opening a fifo read-only blocks until a writer
+        arrives, so the read-write open has to come first.
+      - **It stops reading stdin once its event loop is up**, so closing that
+        write end does *not* stop it -- verified in `/proc/<pid>/fd`, no writers
+        left and still running. It goes on its next write, when the stdout pipe
+        is found closed. Transient, like the other streaming scripts.
+
+      **BlueZ reports the transition itself**: `PowerState` carries
+      `off-enabling` and `on-disabling` beside `on` and `off`, so "turning on"
+      is a state the bar can show rather than something to animate towards. That
+      answers the progress question without a spinner, which a bar has no timer
+      for anyway.
+
+      Only controller power and device `Connected:` lines are acted on. During a
+      scan every device re-reports its signal strength, and none of that changes
+      what the bar shows.
+
 - [ ] **Signal refresh.** `pkill -RTMIN+8 ricebar` to make a module re-read on
       demand, as waybar has, for scripts that cannot stream but should update
       after a keybind rather than on the next tick.
@@ -179,11 +234,26 @@ state a script cannot see.
       click to toggle mute and scroll to change the recording level. The
       tooltip names the capture device.
 
-      This one chooses its own glyph — `U+F130`, or `U+F131` crossed out when
+      This one chooses its own glyph — `U+F036C`, or `U+F036D` crossed out when
       muted — rather than taking one from the module's `icons`. That list is
       indexed by percentage, and muted is not a level: a microphone turned
       down to 20% would otherwise be drawn as a muted one. Both glyphs stay
       overridable, through `ON` and `OFF` in the command.
+
+      **Icons from one family, chosen by measurement.** It was Font Awesome's
+      `U+F130`/`U+F131` first, which looked wrong beside Bluetooth's Material
+      Design glyphs: at font-size 16 the crossed Font Awesome microphone draws
+      18px of ink against 8 or 9 for the Bluetooth pair, and its slash reached
+      3px *past* the module's `background`, so the pill looked clipped on the
+      right. The Material Design pair draws 11px, matching Bluetooth's 11px
+      with 4px clear inside the pill.
+
+      Worth remembering in general: **a Nerd Font glyph can be inked wider than
+      it advances**, and a module with a `background` is sized from the advance,
+      so the ink spills out of the fill. Two glyphs from different families
+      rarely agree on weight or size either. Both are visible only on a real
+      surface — measure ink and pill on the rig, do not judge from the
+      codepoint.
 - [ ] *(original note)* pulseaudio — `U+F026` `U+F027` `U+F028` by volume, `U+F131` muted,
       plus per-device icons (headphone `U+F025`, headset `U+F590`,
       phone `U+F095`, portable `U+F10B`, car `U+F1B9`). Scroll to change,
@@ -243,6 +313,34 @@ state a script cannot see.
       pixel-smooth version means either a new dependency or a custom widget.
       Looks best in a monospace font.
 
+- [x] **Open a popup under the module it belongs to.** Done. A popup could only
+      be anchored to an edge of the bar, since iced reports no widget geometry
+      to `update` and a layer surface is never told its own width -- so a menu
+      belonging to the third module from the right opened under the last one.
+
+      `app::Placed` is a widget operation that walks the laid-out tree and
+      returns two things: the clicked module's rectangle, from an id on the
+      container around it, and the bar's own width, from an id on the container
+      filling it. `iced_layershell` does dispatch `Action::Widget`, walking
+      every surface, which is why the widest bar wins. A click therefore takes
+      two messages: `placed` asks, `Message::PopupUnder` opens.
+
+      **A timer sends `PopupUnder { at: None }` 150 ms after the click**, so a
+      popup that never gets an answer still opens at the edge of the bar rather
+      than not at all. Worth having: this path cannot be driven in a rig, since
+      a virtual pointer still cannot click.
+
+      **Tooltips go the same way**, which is the point: with tooltips anchored
+      by region and menus placed exactly, some hover text appeared under its
+      module and some at the end of the bar. `Opening` says which of the two an
+      answer is for, so one operation serves both. Hovering now costs one walk
+      of the widget tree, which is once per module entered rather than once per
+      frame.
+
+      Not configurable, and it should not be: hover text belongs under the
+      thing it describes, and there is no second sensible answer to choose
+      between.
+
 - [ ] **Measure tooltip text properly.** The surface is sized from a glyph-count
       estimate scaled by font size, because text cannot be measured outside a
       renderer and `window::resize_events()` never fires for layer surfaces.
@@ -260,6 +358,15 @@ being checked for size or shape. None of it is a privilege boundary — the
 config is already trusted to run commands — but a script that misbehaves, or
 a filename that is not what anyone expected, should not be able to wedge the
 bar or hand it an absurd surface to draw.
+
+- [x] **Popup rows are sized from the font size, not a fixed guess.** The old
+      estimate was a flat 9.5px per character with no allowance for the padding
+      inside each row's button, which clipped the last character or two off
+      every row -- worse at any font size above 16. `modules::listing` now sizes
+      from `font_size * 0.7` plus both paddings, and menus, the keyboard
+      layouts and script popups all go through it rather than keeping three
+      copies of the same constants. Measured: JetBrainsMono advances 0.625 of
+      the font size, so 0.7 leaves room for a face with wider capitals.
 
 - [ ] **Bound the popup surface.** `popup_settings` clamps width to 48..720
       but only does `height.max(1.0)`, so height has no upper limit. A tooltip
@@ -436,6 +543,7 @@ bar or hand it an absurd surface to draw.
       | `weather.py`       | `python3`, and the network             |
       | `stocks.py`        | `python3`, and the network             |
       | `windows-popup.py` | `python3`, and a compositor CLI        |
+      | `bluetooth.sh`     | `bluetoothctl` (BlueZ)                 |
 
       Settled by writing the `modules-*` lists from what the machine has:
       `PATH` for programs, an actual sensor read for hardware, so a desktop

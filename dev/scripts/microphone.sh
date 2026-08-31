@@ -17,10 +17,15 @@
 #
 #   exec = "ON='(o)' OFF='(x)' ~/.config/ricebar/scripts/microphone.sh"
 #
-# Nerd Font U+F130 (microphone) and U+F131 (microphone with a slash), written
+# Nerd Font U+F036C (microphone) and U+F036D (microphone crossed out), written
 # as the UTF-8 bytes so this file stays plain ASCII.
-ON="${ON:-\357\204\260}"
-OFF="${OFF:-\357\204\261}"
+#
+# The Material Design pair rather than Font Awesome's U+F130 and U+F131, which
+# these were: the crossed Font Awesome microphone draws 18px of ink at font-size
+# 16, against 8 or 9 for the Bluetooth glyphs beside it, and its slash reaches
+# 3px past the module's own background. Measured on the headless rig.
+ON="${ON:-\363\260\215\254}"
+OFF="${OFF:-\363\260\215\255}"
 
 # Which microphone, for the tooltip. `pactl list` is only read when something
 # actually changes, so this costs nothing while nothing is happening.
