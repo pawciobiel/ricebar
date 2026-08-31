@@ -1372,8 +1372,15 @@ mod tests {
         let mut bar = Bar::new(config);
         assert_eq!(bar.modules.len(), 1);
 
-        // A click asks where the module is before opening anything, so the
-        // answer that operation would give has to be sent by hand here.
+        // Stand-ins for what the widget operation reports, since nothing lays
+        // out a widget tree in a test. Nothing anywhere reads a resolution: the
+        // real width is the bar container's own bounds, whatever monitor it is
+        // on, and these two numbers only have to be a module inside a bar.
+        const MODULE_CENTRE: f32 = 100.0;
+        const BAR_WIDTH: f32 = 640.0;
+
+        // A click asks where the module is before opening anything, so that
+        // answer has to be sent by hand here.
         let clicked = |bar: &mut Bar| {
             tell(bar, Message::Module(0, Event::TogglePopup));
             tell(
@@ -1381,8 +1388,8 @@ mod tests {
                 Message::PopupUnder {
                     module: 0,
                     at: Some(Placement {
-                        centre: 100.0,
-                        width: 1920.0,
+                        centre: MODULE_CENTRE,
+                        width: BAR_WIDTH,
                     }),
                     opening: Opening::Popup,
                 },
