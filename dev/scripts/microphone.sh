@@ -53,16 +53,30 @@ report() {
     fi
 }
 
-# Say where things stand before waiting for the first change. A machine with no
-# capture device at all says so once, rather than leaving a silent gap in the
-# bar that looks like a broken script.
-report || printf '{"text":"%b","tooltip":"No microphone found"}\n' "$OFF"
+# Say where things stand before waiting for the first change. The bar starts
+# with the session, so give PipeWire a few seconds before deciding there is no
+# capture device: saying so wrongly at login would stand until the next change.
+tries=5
+
+until report; do
+    tries=$((tries - 1))
+
+    if [ "$tries" -le 0 ]; then
+        printf '{"text":"%b","tooltip":"No microphone found"}\n' "$OFF"
+        break
+    fi
+
+    sleep 1
+done
 
 pactl subscribe 2>/dev/null | while read -r line; do
     case "$line" in
-        # `source-output` events fire for every application that starts
-        # listening, and are not what this shows -- but a stray refresh is
-        # cheaper than missing a real change, so they are let through.
-        *"'change'"*source*) report ;;
+        # Every event on a source, not only 'change': a microphone plugged in
+        # after this started says so with 'new'. `source-output` events fire
+        # for each application that starts listening and say nothing about the
+        # microphone itself; they read "on source-output #N", so they are not
+        # matched. A change of *server* is how the default source being
+        # switched arrives.
+        *"on source #"* | *"on server #"*) report ;;
     esac
 done
