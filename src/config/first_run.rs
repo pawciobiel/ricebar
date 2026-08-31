@@ -84,6 +84,11 @@ const SCRIPTS: &[(&str, &str)] = &[
     ("volume.sh", include_str!("../../dev/scripts/volume.sh")),
     ("weather.py", include_str!("../../dev/scripts/weather.py")),
     (
+        "wifi-popup.py",
+        include_str!("../../dev/scripts/wifi-popup.py"),
+    ),
+    ("wifi.sh", include_str!("../../dev/scripts/wifi.sh")),
+    (
         "windows-popup.py",
         include_str!("../../dev/scripts/windows-popup.py"),
     ),
@@ -131,6 +136,10 @@ const RIGHT: &[Offered] = &[
     Offered {
         name: "weather",
         needs: &[Need::Program("python3")],
+    },
+    Offered {
+        name: "wifi",
+        needs: &[Need::Program("iwctl"), Need::Program("iw")],
     },
     Offered {
         name: "bluetooth",

@@ -14,6 +14,7 @@ modules-left = ["launcher", "keybindings", "windows", "workspaces", "keyboard", 
 modules-center = ["clock", "weather"]
 modules-right = [
     "bluetooth",
+    "wifi",
     "network",
     "volume",
     "cpu",
@@ -114,6 +115,26 @@ name = "windows"
 label = ""
 tooltip = "Open windows"
 popup = "~/.config/ricebar/scripts/windows-popup.py"
+
+# Wi-Fi: the radio and the signal, with a popup to toggle it, scan and join.
+# `network` below names whichever interface holds the default route; this one is
+# about the radio, so it keeps to a glyph with the SSID on hover.
+[[module.custom]]
+name = "wifi"
+exec = "~/.config/ricebar/scripts/wifi.sh"
+stream = true
+popup = "~/.config/ricebar/scripts/wifi-popup.py"
+# The Mono variant for the glyph: the wifi icons are drawn to fill the cell in
+# the proportional build, so they overflow the fill behind them by a few pixels
+# on the right. Mono scales them to one cell, which centres them.
+font = "JetBrainsMono Nerd Font Mono"
+# 20 rather than the bar's 16: Mono scales an icon to one cell, and the wifi
+# wedge is a wide, short shape, so at 16 it came out half the height of the
+# Bluetooth glyph beside it. The module shows no text, so this only sizes the
+# icon.
+font-size = 20
+colors = ["#6c7086", "#cdd6f4", "#89b4fa"]
+background = "#313244"
 
 # Bluetooth: the adapter's state, with what is connected named on hover and a
 # popup to toggle it and connect a paired device. Pairing needs an agent to answer the passkey
