@@ -73,6 +73,7 @@ Beyond those two:
 |---|---|
 | `clock` | time in any `strftime` format, with a **click-through calendar** — month navigation, ISO week numbers, and a command per day |
 | `workspaces` | clickable, live, on Hyprland, sway and niri |
+| `keyboard` | the layout in use, shown as `PL`, and a click for the list of the rest |
 | `cpu` `memory` | usage, with colour by level |
 | `temperature` | from hwmon, preferring a named sensor over the ACPI zone |
 | `battery` | charge level, and a plug when it is on mains |

@@ -22,7 +22,7 @@ use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 
-use super::{Compositor, Workspace, Workspaces};
+use super::{Compositor, Layouts, Workspace, Workspaces};
 
 pub struct Niri;
 
@@ -50,6 +50,21 @@ impl Compositor for Niri {
 
     fn outputs(&self) -> Subscription<Vec<String>> {
         Subscription::run(watch_outputs)
+    }
+
+    fn layouts(&self) -> Subscription<Layouts> {
+        Subscription::run(watch_layouts)
+    }
+
+    fn set_layout(&self, index: usize) -> Task<()> {
+        Task::future(async move {
+            let request =
+                format!(r#"{{"Action":{{"SwitchLayout":{{"layout":{{"Index":{index}}}}}}}}}"#);
+
+            if let Err(error) = send(&request).await {
+                eprintln!("ricebar: could not switch keyboard layout: {error}");
+            }
+        })
     }
 }
 
@@ -266,6 +281,58 @@ async fn follow_outputs(sender: &mut mpsc::Sender<Vec<String>>) -> io::Result<()
             if sender.send(found).await.is_err() {
                 return Ok(());
             }
+        }
+    }
+
+    Ok(())
+}
+
+fn watch_layouts() -> impl Stream<Item = Layouts> {
+    iced::stream::channel(4, async |mut output: mpsc::Sender<Layouts>| {
+        loop {
+            if let Err(error) = follow_layouts(&mut output).await {
+                eprintln!("ricebar: niri ipc: {error}");
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    })
+}
+
+/// The layouts, kept from the two events niri sends about them: the whole list
+/// when it is configured or reloaded, and an index alone on every switch.
+async fn follow_layouts(sender: &mut mpsc::Sender<Layouts>) -> io::Result<()> {
+    let stream = connect().await?;
+    let mut stream = BufReader::new(stream);
+
+    stream.get_mut().write_all(b"\"EventStream\"\n").await?;
+
+    let mut layouts = Layouts::default();
+    let mut lines = stream.lines();
+
+    while let Some(line) = lines.next_line().await? {
+        let Ok(event) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+
+        let Some((name, body)) = event.as_object().and_then(|event| event.iter().next()) else {
+            continue;
+        };
+
+        let index =
+            |value: Option<&Value>| value.and_then(Value::as_u64).unwrap_or_default() as usize;
+
+        match name.as_str() {
+            "KeyboardLayoutsChanged" => {
+                let changed = body.get("keyboard_layouts");
+                layouts.names = parse(changed.and_then(|changed| changed.get("names")));
+                layouts.current = index(changed.and_then(|changed| changed.get("current_idx")));
+            }
+            "KeyboardLayoutSwitched" => layouts.current = index(body.get("idx")),
+            _ => continue,
+        }
+
+        if sender.send(layouts.clone()).await.is_err() {
+            return Ok(());
         }
     }
 

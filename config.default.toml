@@ -75,6 +75,17 @@ show-empty = true
 # ambiguous in a nested session — name one to settle it.
 compositor = "auto"
 
+# The keyboard layout in use. Click it for a list of the layouts you configured,
+# and click one of those to switch. Configured but not shown: with a single
+# layout there is nothing to switch to, so add "keyboard" to one of the
+# modules-* lists above only if you set up more than one.
+[module.keyboard]
+format = "{icon} {value}"
+icon = "\uf11c"       # a keyboard
+short = true          # "PL" rather than "Polish", from xkb's own list
+compositor = "auto"
+background = "#313244"
+
 # {icon} and {value}; drop {value} for an icon on its own. `colors` picks the
 # text colour by level, lowest first, the same way `icons` picks the glyph.
 [module.cpu]

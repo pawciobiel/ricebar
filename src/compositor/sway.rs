@@ -18,7 +18,7 @@ use serde_json::Value;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
 
-use super::{Compositor, Workspace, Workspaces};
+use super::{Compositor, Layouts, Workspace, Workspaces};
 
 pub struct Sway;
 
@@ -42,6 +42,23 @@ impl Compositor for Sway {
     fn outputs(&self) -> Subscription<Vec<String>> {
         Subscription::run(watch_outputs)
     }
+
+    fn layouts(&self) -> Subscription<Layouts> {
+        Subscription::run(watch_layouts)
+    }
+
+    fn set_layout(&self, index: usize) -> Task<()> {
+        Task::future(async move {
+            // `type:keyboard` rather than one device: sway keeps a layout per
+            // keyboard, and switching only the one you named leaves the laptop
+            // keyboard on the old layout while the external one moves.
+            let payload = format!("input type:keyboard xkb_switch_layout {index}");
+
+            if let Err(error) = command(&payload).await {
+                eprintln!("ricebar: could not switch keyboard layout: {error}");
+            }
+        })
+    }
 }
 
 pub fn available() -> bool {
@@ -61,6 +78,7 @@ const GET_WORKSPACES: u32 = 1;
 const SUBSCRIBE: u32 = 2;
 const GET_OUTPUTS: u32 = 3;
 const GET_TREE: u32 = 4;
+const GET_INPUTS: u32 = 100;
 
 async fn connect() -> io::Result<UnixStream> {
     let path = socket_path().ok_or_else(|| io::Error::other("SWAYSOCK is not set"))?;
@@ -224,6 +242,81 @@ async fn follow_outputs(sender: &mut mpsc::Sender<Vec<String>>) -> io::Result<()
         if sender.send(outputs().await?).await.is_err() {
             return Ok(());
         }
+    }
+}
+
+// Only the fields the bar uses; serde ignores the rest of sway's JSON.
+#[derive(Deserialize)]
+struct RawInput {
+    #[serde(rename = "type")]
+    kind: String,
+    #[serde(default)]
+    xkb_active_layout_index: usize,
+    #[serde(default)]
+    xkb_layout_names: Vec<String>,
+}
+
+/// The layouts configured, from the keyboard most likely to be the one being
+/// typed on.
+async fn layouts() -> io::Result<Layouts> {
+    let mut stream = connect().await?;
+    send(&mut stream, GET_INPUTS, "").await?;
+    let (_, payload) = receive(&mut stream).await?;
+    let inputs: Vec<RawInput> = serde_json::from_slice(&payload).map_err(io::Error::other)?;
+
+    let keyboards: Vec<&RawInput> = inputs
+        .iter()
+        .filter(|input| input.kind == "keyboard")
+        .collect();
+
+    // A power button and a set of hotkeys both report as keyboards, and both
+    // carry a layout of their own. Prefer one with something to switch
+    // between; a machine with several real keyboards configures them alike, so
+    // any of those answers the question.
+    keyboards
+        .iter()
+        .find(|input| input.xkb_layout_names.len() > 1)
+        .or(keyboards.first())
+        .map(|input| Layouts {
+            names: input.xkb_layout_names.clone(),
+            current: input.xkb_active_layout_index,
+        })
+        .ok_or_else(|| io::Error::other("no keyboard reports a layout"))
+}
+
+fn watch_layouts() -> impl Stream<Item = Layouts> {
+    iced::stream::channel(4, async |mut output: mpsc::Sender<Layouts>| {
+        loop {
+            if let Err(error) = follow_layouts(&mut output).await {
+                eprintln!("ricebar: sway ipc: {error}");
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    })
+}
+
+async fn follow_layouts(sender: &mut mpsc::Sender<Layouts>) -> io::Result<()> {
+    let mut events = connect().await?;
+    send(&mut events, SUBSCRIBE, r#"["input"]"#).await?;
+    receive(&mut events).await?;
+
+    // An input event fires for a device being added, a libinput setting
+    // changing and much else besides. Most leave the layout alone, and a bar
+    // that redrew for each of them would be doing it for nothing.
+    let mut sent: Option<Layouts> = None;
+
+    loop {
+        let found = layouts().await?;
+
+        if sent.as_ref() != Some(&found) {
+            sent = Some(found.clone());
+
+            if sender.send(found).await.is_err() {
+                return Ok(());
+            }
+        }
+
+        receive(&mut events).await?;
     }
 }
 

@@ -60,24 +60,68 @@ work does not have to be rediscovered.
       number comes from. `format` takes `{icon}` and `{value}`, and each takes
       its own `background`/`foreground`. Still to do: **volume** and
       **network**, which need PulseAudio/D-Bus rather than a sysfs read.
-- [ ] **Keyboard layout module.** Needs compositor support: Hyprland reports it
-      over `.socket2.sock` (`activelayout>>`), so it likely belongs behind the
-      `Compositor` trait rather than in a module reading the compositor itself.
+- [x] **Keyboard layout module.** Done, as `keyboard`, behind two new methods
+      on the `Compositor` trait: `layouts()` streams every layout configured
+      and which is in use, and `set_layout(index)` picks one. Clicking the
+      module opens a list of the layouts on a surface of its own, the way the
+      clock's calendar and `[[module.menu]]` do; clicking a line switches to
+      it, and the one in use is drawn in the `accent` colour.
+
+      **The whole list every time**, rather than the active layout alone, for
+      the same reason the workspaces backends publish whole snapshots: the
+      popup lists what the compositor has, so it cannot be allowed to drift.
+
+      **The two compositors do not agree on what to call a layout.** sway and
+      niri use xkb's description, "Polish"; Hyprland reports the code it was
+      configured with, `pl`. Rather than translate in the backends, both forms
+      reach the module and `modules::keyboard::Xkb` maps between them out of
+      xkb's own table, `/usr/share/X11/xkb/rules/evdev.lst`: the code upper
+      cased for the bar, the description for the popup and for hover. No list
+      of countries in the source, and nothing to write in config. A layout xkb
+      has never heard of is shown as it came rather than dropped.
+
+      **Per backend:**
+
+      - Hyprland: `j/devices` for the `main` keyboard's `layout` (comma
+        separated codes) and `active_layout_index`, and `activelayout>>` on the
+        event socket. Switching is `switchxkblayout <device> <index>` — a
+        command of its own, *not* a dispatcher: `dispatch switchxkblayout`
+        answers "Invalid dispatcher". Its reply is checked, because Hyprland
+        reports a refusal on the same socket as a success.
+      - sway: `GET_INPUTS` (type 100) for `xkb_layout_names` and
+        `xkb_active_layout_index`, subscribed to `["input"]`. It prefers a
+        keyboard with more than one layout configured, because a power button
+        and a row of hotkeys both report as keyboards and carry a layout each.
+        Switching is `input type:keyboard xkb_switch_layout <index>`, which
+        moves every keyboard rather than leaving the laptop one behind.
+      - niri: `KeyboardLayoutsChanged` carries `names` and `current_idx`, and
+        `KeyboardLayoutSwitched` carries an index alone, so both are kept.
+        Switching is `{"Action":{"SwitchLayout":{"layout":{"Index":n}}}}`.
+
+      **Verified against all three**, with the bar following a real switch:
+      Hyprland `PL` to `US` on the live session, sway `US` to `PL` nested, niri
+      `PL` to `US` nested. Every switch command was also run by hand and
+      answered `ok`, `success` and `Ok:Handled`. The popup itself cannot be
+      opened in a rig — a virtual pointer still cannot click, as the note
+      further down says — so opening, closing and choosing are covered by a
+      test in `app.rs` that sends the same messages a click would.
+
+      **Hyprland sends `activelayout` for every device it has**, eight of them
+      here for one change, and only one of those lines is the keyboard the bar
+      shows. That is why the backend re-queries rather than reading the layout
+      out of the event.
 - [x] **Click actions for custom modules.** `on-click` runs a command and makes
       the module a button; with no `exec` and only a `label`, that is a
       launcher.
 - [x] **Scroll actions.** `on-scroll-up`/`on-scroll-down` on custom modules and
       on the built-in sensors, which is what backlight and volume wanted.
-- [ ] **A font per module.** `[bar] font` is bar-wide, so an icon must exist in
-      the one family the whole bar uses. Picking any glyph is already possible
-      through `icons`, but not picking a *face* — a bar in JetBrainsMono cannot
-      put one module in Material Symbols without moving everything.
-
-      A `font` key on sensors and custom modules, passed to that widget's
-      `text`, would close it. Small, and it makes fallback explicit instead of
-      leaving it to whatever fontconfig happens to substitute. Graphical icons
-      are the other half of the same problem and are done; this is the half
-      that is left.
+- [x] **A font per module.** Done. `font` and `font-size` on the sensors and on
+      custom modules, resolved once in `modules::typography` and applied in
+      `app::view`, so a bar in JetBrainsMono can put one module in Material
+      Symbols without moving everything. Every module draws its labels through
+      `icon::faced`, which is what carries the face to the ones that do not go
+      through `labelled`. Fallback is explicit rather than left to whatever
+      fontconfig substitutes.
 - [x] **Graphical icons.** Done, in `src/modules/icon.rs`. An entry in an
       `icons` list that looks like a path — it contains `/`, or starts with
       `~` — is loaded as a picture; svg, png and jpeg all work, and one ramp
@@ -171,9 +215,15 @@ state a script cannot see.
 
 ## Configuration
 
-- [ ] **Hot reload.** Watch the config file and rebuild the modules in place.
-      The registry in `app::Bar::new` already builds everything from `Config`,
-      so this is mostly a matter of swapping state and re-running `region()`.
+- [x] **Hot reload.** Done. `app::watch` polls the file's timestamp once a
+      second — not inotify, which misses the editors that save by writing a new
+      file and renaming it over the old one — and `app::reload` builds a whole
+      new `Bar` and replaces every surface. A config that does not parse is
+      refused and reported on the bar itself, since a bar started by the
+      compositor has no terminal to print to. The generation counter in
+      `app::subscription` is what stops the new modules inheriting the old
+      streams. Only one thing is still frozen: taking the *last* `font` key out
+      of a config, because the fallback family is chosen once when iced starts.
 - [ ] **Explicit font files.** `Settings.fonts` takes `Vec<Cow<'static, [u8]>>`,
       so a `font-files` key could load a font ricebar ships or the user points
       at, for machines where the family is not installed. Today an unknown
@@ -198,11 +248,10 @@ state a script cannot see.
       renderer and `window::resize_events()` never fires for layer surfaces.
       Deliberately over-wide: too narrow wraps and clips. A real fix probably
       needs `iced_graphics`' text measurement.
-- [ ] **Per-monitor bars.** Every output currently shows the same content,
-      which matches waybar. Folded into *Several bars in one config* below —
-      pinning a bar to an output and running two bars from one file turned out
-      to be the same change, and doing them separately would mean building the
-      `window::Id` lookup twice.
+- [x] **Per-monitor bars.** Done, as part of *Several bars in one config*
+      below. Pinning a bar to an output and running two bars from one file
+      turned out to be the same change, and doing them separately would have
+      meant building the `window::Id` lookup twice.
 
 ## Untrusted input
 
@@ -313,6 +362,14 @@ bar or hand it an absurd surface to draw.
       on the active output. Narrow, but a real regression, and it belongs in the
       docs rather than in a bug report.
 
+      That fallback did not work at all until it was tested: `Message::Outputs`
+      returned early when the list matched what the bar already held, and with
+      no backend the list is empty and the bar starts empty, so the two matched
+      on the very first message and no surface was ever built. A bar with
+      `compositor = "none"` — or on any compositor ricebar does not speak —
+      simply never appeared. `Bar::told` now says whether the list has ever
+      arrived, which is a different question from what it holds.
+
       **The trap to design around.** An `OutputOption::OutputName` that matches
       nothing resolves to `None`, and `None` means "compositor chooses"
       (`layershellev` lib.rs:2618). A typo, or an output that is unplugged at
@@ -415,6 +472,28 @@ none of them stops the bar or its other modules.
 - [ ] **A module that has gone stale.** A streaming script that stops printing
       looks identical to one with nothing to say. Worth marking a module whose
       last update is far older than its interval.
+
+- [ ] **A streaming script that has never printed draws nothing at all**, which
+      is what made a blank volume module look like a missing icon rather than a
+      broken script. The scripts now always print something, but the bar has no
+      opinion of its own: a module named in a `modules-*` list and drawing an
+      empty row is indistinguishable from one that is not there. Something as
+      small as the module's name in `dim` until its first line would say which.
+
+- [ ] **`kill_on_drop` reaches the script but not what the script started.**
+      A reload drops the subscription and kills `sh -c <script>`, but a script
+      whose last line is a pipeline — `pactl subscribe | while read ...`, which
+      is both shipped streaming scripts — leaves the `while` subshell and the
+      `pactl` behind, reparented to init. They are not permanent: the subshell
+      dies of `SIGPIPE` on its next write, and `pactl` on the one after. But on
+      a quiet machine that can be a long time, and every reload adds a pair.
+      Measured: after one reload, `3542 volume.sh` and `3541 pactl subscribe`
+      were still there with the new pair already running beside them.
+
+      The fix is `process_group(0)` on the child — that much is in std — and
+      signalling the whole group when the future is dropped, which needs
+      `libc::kill(-pgid, ...)`. `libc` is already in the tree under tokio, so
+      it costs a direct dependency and no compile time.
 
 ## Last, and least urgent
 

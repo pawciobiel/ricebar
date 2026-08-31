@@ -288,6 +288,7 @@ impl Default for Style {
 pub struct Modules {
     pub clock: Clock,
     pub workspaces: Workspaces,
+    pub keyboard: Keyboard,
     pub cpu: Sensor,
     pub memory: Sensor,
     pub temperature: Sensor,
@@ -527,6 +528,50 @@ impl Default for Workspaces {
         Self {
             show_empty: true,
             compositor: Backend::default(),
+        }
+    }
+}
+
+/// The keyboard layout in use. Clicking the module moves to the next one.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
+pub struct Keyboard {
+    /// `{icon}` and `{value}` are replaced. Drop `{value}` for an icon alone.
+    pub format: String,
+    /// One glyph, or a path to a picture. A layout is not a level, so this is
+    /// a single icon rather than a list to choose from. Empty draws none.
+    pub icon: String,
+    /// Overrides `[bar.style] icon-size` for this module alone.
+    pub icon_size: Option<f32>,
+    /// Draw this module in a face of its own, overriding the bar's `font`.
+    pub font: Option<String>,
+    /// Text size for this module alone, overriding the bar's `font-size`.
+    pub font_size: Option<f32>,
+    /// Show `PL` rather than `Polish`. The code comes from xkb's own list, so
+    /// nothing has to be written here for it.
+    pub short: bool,
+    /// Which compositor to talk to, as in `[module.workspaces]`.
+    pub compositor: Backend,
+    /// Fill behind this module. Unset draws on the bar's own background.
+    pub background: Option<Rgba>,
+    /// Text colour for this module, overriding the bar's.
+    pub foreground: Option<Rgba>,
+}
+
+impl Default for Keyboard {
+    fn default() -> Self {
+        Self {
+            format: String::from("{icon} {value}"),
+            // U+F11C, a keyboard. Written as an escape because a Nerd Font
+            // glyph is a private-use codepoint that does not survive a copy.
+            icon: String::from("\u{f11c}"),
+            icon_size: None,
+            font: None,
+            font_size: None,
+            short: true,
+            compositor: Backend::default(),
+            background: None,
+            foreground: None,
         }
     }
 }

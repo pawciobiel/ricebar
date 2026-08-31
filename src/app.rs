@@ -1163,6 +1163,54 @@ mod tests {
         );
     }
 
+    /// A click opens the layout list, a second click closes it, and choosing
+    /// one closes it too. The module cannot be clicked in a test rig, so this
+    /// is where that path is checked.
+    #[test]
+    fn the_keyboard_popup_opens_closes_and_chooses() {
+        let config = config::Config {
+            bars: vec![config::Bar {
+                modules_left: vec![String::from("keyboard")],
+                ..config::Bar::default()
+            }],
+            ..config::Config::default()
+        };
+
+        let mut bar = Bar::new(config);
+        assert_eq!(bar.modules.len(), 1);
+
+        // Nothing to choose from until the compositor has said what there is.
+        tell(&mut bar, Message::Module(0, Event::TogglePopup));
+        assert!(bar.popup.is_none());
+
+        tell(
+            &mut bar,
+            Message::Module(
+                0,
+                Event::Layouts(compositor::Layouts {
+                    names: vec![String::from("pl"), String::from("gb")],
+                    current: 0,
+                }),
+            ),
+        );
+
+        tell(&mut bar, Message::Module(0, Event::TogglePopup));
+        assert!(
+            matches!(
+                bar.popup.as_ref().map(|popup| &popup.kind),
+                Some(PopupKind::Module)
+            ),
+            "a click opens the list"
+        );
+
+        tell(&mut bar, Message::Module(0, Event::TogglePopup));
+        assert!(bar.popup.is_none(), "a second click closes it");
+
+        tell(&mut bar, Message::Module(0, Event::TogglePopup));
+        tell(&mut bar, Message::Module(0, Event::Activate(1)));
+        assert!(bar.popup.is_none(), "choosing a layout closes it");
+    }
+
     /// The same list arriving again is nothing new, and rebuilding surfaces
     /// for it would tear down a bar the user is looking at.
     #[test]

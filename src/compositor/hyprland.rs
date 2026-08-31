@@ -17,7 +17,7 @@ use serde::Deserialize;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 
-use super::{Compositor, Workspace, Workspaces};
+use super::{Compositor, Layouts, Workspace, Workspaces};
 
 pub struct Hyprland;
 
@@ -42,6 +42,34 @@ impl Compositor for Hyprland {
 
     fn outputs(&self) -> Subscription<Vec<String>> {
         Subscription::run(watch_monitors)
+    }
+
+    fn layouts(&self) -> Subscription<Layouts> {
+        Subscription::run(watch_layouts)
+    }
+
+    fn set_layout(&self, index: usize) -> Task<()> {
+        Task::future(async move {
+            // A command of its own rather than a dispatcher -- `dispatch
+            // switchxkblayout` answers "Invalid dispatcher" -- and it names a
+            // device, so the main keyboard has to be looked up first.
+            let switched = async {
+                let keyboard = keyboard().await?;
+                let reply = request(&format!("switchxkblayout {} {index}", keyboard.name)).await?;
+
+                // Hyprland answers on the same socket whether it worked or
+                // not, so a command it does not know is a successful write and
+                // a silent no-op.
+                match reply.trim() {
+                    "ok" => Ok(()),
+                    problem => Err(io::Error::other(problem.to_owned())),
+                }
+            };
+
+            if let Err(error) = switched.await {
+                eprintln!("ricebar: could not switch keyboard layout: {error}");
+            }
+        })
     }
 }
 
@@ -166,6 +194,90 @@ async fn follow_monitors(output: &mut mpsc::Sender<Vec<String>>) -> io::Result<(
             continue;
         }
         if output.send(monitors().await?).await.is_err() {
+            return Ok(());
+        }
+    }
+
+    Ok(())
+}
+
+#[derive(Deserialize)]
+struct RawDevices {
+    keyboards: Vec<RawKeyboard>,
+}
+
+#[derive(Deserialize)]
+struct RawKeyboard {
+    name: String,
+    /// The keyboard Hyprland applies the config's layout list to.
+    main: bool,
+    /// Every layout configured, as the codes they were written with, comma
+    /// separated: `pl,gb`. Hyprland is the only one of the three that reports
+    /// codes rather than xkb's descriptions.
+    layout: String,
+    /// Which of `layout` is in use. Defaulted because older Hyprland versions
+    /// report only `active_keymap`.
+    #[serde(default)]
+    active_layout_index: usize,
+}
+
+impl RawKeyboard {
+    fn layouts(&self) -> Layouts {
+        Layouts {
+            names: self
+                .layout
+                .split(',')
+                .map(|name| name.trim().to_owned())
+                .collect(),
+            current: self.active_layout_index,
+        }
+    }
+}
+
+/// The keyboard whose layout the bar shows and switches.
+async fn keyboard() -> io::Result<RawKeyboard> {
+    let raw = request("j/devices").await?;
+    let devices: RawDevices = serde_json::from_str(&raw).map_err(io::Error::other)?;
+
+    let mut keyboards = devices.keyboards;
+    if keyboards.is_empty() {
+        return Err(io::Error::other("hyprland reports no keyboards"));
+    }
+
+    // Everything else calling itself a keyboard is a power button or a row of
+    // hotkeys, each carrying a layout of its own.
+    let main = keyboards.iter().position(|keyboard| keyboard.main);
+    Ok(keyboards.swap_remove(main.unwrap_or_default()))
+}
+
+fn watch_layouts() -> impl Stream<Item = Layouts> {
+    iced::stream::channel(4, async |mut output: mpsc::Sender<Layouts>| {
+        loop {
+            if let Err(error) = follow_layouts(&mut output).await {
+                eprintln!("ricebar: hyprland ipc: {error}");
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    })
+}
+
+async fn follow_layouts(output: &mut mpsc::Sender<Layouts>) -> io::Result<()> {
+    let events = UnixStream::connect(socket_dir()?.join(".socket2.sock")).await?;
+    let mut lines = BufReader::new(events).lines();
+
+    if output.send(keyboard().await?.layouts()).await.is_err() {
+        return Ok(());
+    }
+
+    while let Some(line) = lines.next_line().await? {
+        // The event carries the new layout, but Hyprland sends one for every
+        // device it has -- eight of them here for a single change, and only
+        // one of those is the keyboard the bar shows. Asking again costs one
+        // round trip and answers for the right device.
+        if !line.starts_with("activelayout>>") {
+            continue;
+        }
+        if output.send(keyboard().await?.layouts()).await.is_err() {
             return Ok(());
         }
     }

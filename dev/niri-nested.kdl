@@ -5,7 +5,9 @@
 
 input {
     keyboard {
+        // Two layouts, so the keyboard module has something to switch between.
         xkb {
+            layout "us,pl"
         }
     }
 }

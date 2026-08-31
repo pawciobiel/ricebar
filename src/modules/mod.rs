@@ -6,6 +6,7 @@
 pub mod clock;
 pub mod custom;
 pub mod icon;
+pub mod keyboard;
 pub mod menu;
 pub mod notice;
 pub mod sensor;
@@ -32,6 +33,8 @@ pub enum Event {
     Workspaces(compositor::Workspaces),
     /// The user asked to switch workspace.
     FocusWorkspace(i32),
+    /// The keyboard layouts configured, and which is in use.
+    Layouts(compositor::Layouts),
     /// A module produced new content to display.
     Content(Content),
     /// The user clicked a module that owns a popup.
@@ -201,6 +204,7 @@ pub fn typography(name: &str, config: &config::Modules) -> (Option<String>, Opti
         "temperature" => sensor(&config.temperature),
         "battery" => sensor(&config.battery),
         "backlight" => sensor(&config.backlight),
+        "keyboard" => (config.keyboard.font.clone(), config.keyboard.font_size),
         _ => config
             .custom
             .iter()
@@ -219,6 +223,7 @@ pub fn build(name: &str, config: &config::Modules, trusted: bool) -> Option<Box<
     match name {
         "clock" => Some(Box::new(clock::Clock::new(&config.clock, trusted))),
         "workspaces" => Some(Box::new(workspaces::Workspaces::new(&config.workspaces))),
+        "keyboard" => Some(Box::new(keyboard::Keyboard::new(&config.keyboard))),
         "cpu" => Some(Box::new(sensor::Sensor::new(
             sensor::Kind::Cpu,
             &config.cpu,

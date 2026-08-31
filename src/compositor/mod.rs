@@ -30,6 +30,27 @@ pub struct Workspace {
 /// drift out of sync with the compositor.
 pub type Workspaces = Vec<Workspace>;
 
+/// The keyboard layouts configured, and which of them is in use.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Layouts {
+    /// Every layout, in the order the compositor holds them — which is the
+    /// order they were configured in, and what an index means.
+    ///
+    /// sway and niri name them as xkb describes them, "Polish"; Hyprland
+    /// reports the codes it was configured with, `pl`. The module accepts
+    /// either, so neither has to be translated here.
+    pub names: Vec<String>,
+    /// Which of `names` is in use.
+    pub current: usize,
+}
+
+impl Layouts {
+    /// The layout in use, if the compositor has named any.
+    pub fn active(&self) -> Option<&str> {
+        self.names.get(self.current).map(String::as_str)
+    }
+}
+
 pub trait Compositor {
     fn name(&self) -> &'static str;
 
@@ -38,6 +59,14 @@ pub trait Compositor {
 
     /// Ask the compositor to switch to a workspace.
     fn focus(&self, id: i32) -> Task<()>;
+
+    /// A stream of the keyboard layouts configured, pushed as the one in use
+    /// changes. The whole list every time, so the popup that lists them cannot
+    /// drift out of sync with the compositor.
+    fn layouts(&self) -> Subscription<Layouts>;
+
+    /// Ask the compositor for the layout at this index of [`Layouts::names`].
+    fn set_layout(&self, index: usize) -> Task<()>;
 
     /// The monitors that exist, pushed again whenever one is plugged in or
     /// taken away.

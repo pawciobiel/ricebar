@@ -10,7 +10,7 @@ vertical-align = "center"
 font = "JetBrainsMono Nerd Font"
 font-size = 16
 
-modules-left = ["launcher", "keybindings", "windows", "workspaces", "stocks"]
+modules-left = ["launcher", "keybindings", "windows", "workspaces", "keyboard", "stocks"]
 modules-center = ["clock", "weather"]
 modules-right = [
     "network",
@@ -47,6 +47,15 @@ on-click-day = "notify-send ricebar {}"
 [module.workspaces]
 show-empty = true
 compositor = "auto"
+
+# The layout in use, and a click for the list of the rest. `short` reads xkb's
+# own table, so "Polish" is drawn as PL with nothing written here for it.
+[module.keyboard]
+format = "{icon} {value}"
+icon = "\uf11c"
+short = true
+compositor = "auto"
+background = "#313244"
 
 [module.cpu]
 format = "{icon} {value}"
@@ -93,7 +102,8 @@ on-click = "rofi -show drun -location 1 -yoffset 56 -xoffset 4"
 # box, which ricebar's own popups do not, so this stays rofi's job.
 [[module.custom]]
 name = "keybindings"
-label = ""
+# U+F0633, the command symbol: the plain keyboard now means the layout.
+label = "\U000F0633"
 tooltip = "Key bindings"
 on-click = "~/.config/hypr/scripts/show_key_bindings.sh"
 
