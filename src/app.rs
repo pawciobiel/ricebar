@@ -2,9 +2,10 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
+use iced::advanced::widget;
 use iced::futures::{SinkExt, Stream};
 use iced::widget::{column, container, mouse_area, row, space, text};
-use iced::{Alignment, Border, Color, Element, Length, Subscription, Task, window};
+use iced::{Alignment, Border, Color, Element, Length, Rectangle, Subscription, Task, window};
 use iced_layershell::reexport::{
     Anchor, KeyboardInteractivity, Layer, NewLayerShellSettings, OutputOption,
 };
@@ -38,6 +39,10 @@ pub struct Bar {
     told: bool,
     /// The hover popup, when one is open.
     popup: Option<Popup>,
+    /// Which module was last located, and where. Kept because a script's popup
+    /// arrives after the click that asked for it, and both need the same
+    /// placement.
+    placement: Option<(usize, Placement)>,
     /// The module the pointer is currently inside.
     hovered: Option<usize>,
     /// Scroll accumulated per module. A wheel reports whole notches, but a
@@ -90,6 +95,25 @@ struct Popup {
     module: usize,
     kind: PopupKind,
     opened: Instant,
+}
+
+/// Where a module sits on its bar, in that surface's own coordinates.
+#[derive(Debug, Clone, Copy)]
+pub struct Placement {
+    /// The middle of the module, which is what the popup is centred under.
+    centre: f32,
+    /// The bar's own width, which is the room the popup has to stay inside.
+    width: f32,
+}
+
+/// What a placement answer is for. One operation serves both, since a tooltip
+/// and a menu want to sit in exactly the same place.
+#[derive(Debug, Clone, Copy)]
+pub enum Opening {
+    /// Hover text.
+    Tooltip,
+    /// The module's own popup, opened by a click.
+    Popup,
 }
 
 enum PopupKind {
@@ -170,6 +194,7 @@ impl Bar {
             outputs: Vec::new(),
             told: false,
             popup: None,
+            placement: None,
             hovered: None,
             scrolled: HashMap::new(),
             retiring: None,
@@ -273,6 +298,14 @@ pub enum Message {
     Outputs(Vec<String>),
     /// Build and remove surfaces so they match the monitors and the config.
     Place,
+    /// Open this module's popup, under `at` when the widget tree said where the
+    /// module is. A timer sends `None` shortly after the click, so a popup still
+    /// opens at the edge of the bar if that answer never comes.
+    PopupUnder {
+        module: usize,
+        at: Option<Placement>,
+        opening: Opening,
+    },
 }
 
 /// How long to let a monitor settle before building a bar on it. Long enough
@@ -673,7 +706,7 @@ pub fn update(bar: &mut Bar, message: Message) -> Task<Message> {
         Message::Enter(index) => {
             bar.hovered = Some(index);
             bar.entered = Instant::now();
-            open_popup(bar)
+            locate(index, Opening::Tooltip)
         }
         Message::Scroll(index, delta) => {
             let banked = bar.scrolled.entry(index).or_default();
@@ -760,6 +793,22 @@ pub fn update(bar: &mut Bar, message: Message) -> Task<Message> {
             })
         }
         Message::Place => place(bar),
+        Message::PopupUnder {
+            module,
+            at,
+            opening,
+        } => {
+            if let Some(at) = at {
+                bar.placement = Some((module, at));
+            }
+
+            match opening {
+                // Whichever module the pointer is on now, which may not be the
+                // one this answer was asked for.
+                Opening::Tooltip => open_popup(bar),
+                Opening::Popup => show_popup(bar, module),
+            }
+        }
         // `to_layer_message` appends its own variants to this enum. Upstream's
         // example ends with `unreachable!()`, which is a panic waiting to happen.
         _ => Task::none(),
@@ -809,7 +858,16 @@ fn open_popup(bar: &mut Bar) -> Task<Message> {
     let width = widest.mul_add(font_size * TOOLTIP_GLYPH_RATIO, 2.0 * TOOLTIP_PADDING);
     let height = lines.mul_add(font_size * TOOLTIP_LINE_RATIO, 2.0 * TOOLTIP_PADDING);
 
-    let settings = popup_settings(bar, index, width, height, true);
+    let settings = popup_settings(
+        bar,
+        index,
+        width,
+        height,
+        true,
+        bar.placement
+            .filter(|(module, _)| *module == index)
+            .map(|(_, placement)| placement),
+    );
 
     bar.popup = Some(Popup {
         id,
@@ -832,7 +890,98 @@ fn toggle_popup(bar: &mut Bar, index: usize) -> Task<Message> {
         return close_popup(bar);
     }
 
-    show_popup(bar, index)
+    locate(index, Opening::Popup)
+}
+
+/// Ask where a module is, and open what was asked for under it.
+///
+/// Where the module sits has to be asked of the widget tree, so opening waits
+/// one message for the answer. The timer beside it is the fallback: if that
+/// answer never comes the popup still opens, at the edge of the bar as it used
+/// to, rather than not at all.
+fn locate(index: usize, opening: Opening) -> Task<Message> {
+    Task::batch([
+        placed(index, opening),
+        Task::future(async move {
+            tokio::time::sleep(PLACEMENT_GRACE).await;
+            Message::PopupUnder {
+                module: index,
+                at: None,
+                opening,
+            }
+        }),
+    ])
+}
+
+/// How long to wait for the widget tree to say where a module is. Long enough
+/// for a frame, short enough that a popup opening without an answer still feels
+/// like a response to the click.
+const PLACEMENT_GRACE: Duration = Duration::from_millis(150);
+
+/// The id given to the container around one module, so a widget operation can
+/// find where it ended up.
+fn module_id(index: usize) -> widget::Id {
+    widget::Id::from(format!("ricebar-module-{index}"))
+}
+
+/// The id on the container filling a whole bar, which is how wide that bar is.
+const BAR_ID: &str = "ricebar-bar";
+
+/// Where a module was drawn, and how wide its bar is.
+///
+/// iced reports no widget geometry to `update`, and a layer surface never
+/// learns its own width, so both come from walking the widget tree after it has
+/// been laid out. Without this a popup can only be anchored to an edge of the
+/// bar, which puts a menu belonging to the third module from the right under
+/// the last one.
+struct Placed {
+    wanted: widget::Id,
+    module: Option<Rectangle>,
+    bar: Option<f32>,
+}
+
+impl widget::Operation<(Rectangle, f32)> for Placed {
+    fn container(&mut self, id: Option<&widget::Id>, bounds: Rectangle) {
+        let Some(id) = id else {
+            return;
+        };
+
+        if *id == self.wanted {
+            self.module = Some(bounds);
+        } else if *id == widget::Id::new(BAR_ID) {
+            // Every surface is walked, so the widest bar wins. With one bar per
+            // output that is the one the module is on.
+            self.bar = Some(self.bar.unwrap_or_default().max(bounds.width));
+        }
+    }
+
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn widget::Operation<(Rectangle, f32)>)) {
+        operate(self);
+    }
+
+    fn finish(&self) -> widget::operation::Outcome<(Rectangle, f32)> {
+        match (self.module, self.bar) {
+            (Some(module), Some(bar)) => widget::operation::Outcome::Some((module, bar)),
+            _ => widget::operation::Outcome::None,
+        }
+    }
+}
+
+/// Ask where a module is before opening its popup under it.
+fn placed(index: usize, opening: Opening) -> Task<Message> {
+    widget::operate(Placed {
+        wanted: module_id(index),
+        module: None,
+        bar: None,
+    })
+    .map(move |(module, bar)| Message::PopupUnder {
+        module: index,
+        at: Some(Placement {
+            centre: module.center_x(),
+            width: bar,
+        }),
+        opening,
+    })
 }
 
 /// Open a module's popup, replacing whatever else was open.
@@ -849,14 +998,28 @@ fn show_popup(bar: &mut Bar, index: usize) -> Task<Message> {
         return Task::none();
     }
 
-    let Some(shape) = bar.modules.get(index).and_then(|module| module.popup()) else {
+    let style = style_for(bar, index);
+    let Some(shape) = bar
+        .modules
+        .get(index)
+        .and_then(|module| module.popup(style))
+    else {
         return Task::none();
     };
 
     let closed = close_popup(bar);
     let id = window::Id::unique();
     // Unlike a tooltip, this one accepts pointer input, since it is clicked.
-    let settings = popup_settings(bar, index, shape.width, shape.height, false);
+    let settings = popup_settings(
+        bar,
+        index,
+        shape.width,
+        shape.height,
+        false,
+        bar.placement
+            .filter(|(module, _)| *module == index)
+            .map(|(_, placement)| placement),
+    );
 
     bar.popup = Some(Popup {
         id,
@@ -913,6 +1076,7 @@ fn popup_settings(
     width: f32,
     height: f32,
     transparent_to_events: bool,
+    under: Option<Placement>,
 ) -> NewLayerShellSettings {
     let width = width.clamp(48.0, 720.0) as u32;
     let height = height.max(1.0) as u32;
@@ -935,6 +1099,15 @@ fn popup_settings(
         None
     };
 
+    // Where the module actually is, when that has been asked. Anchored left and
+    // pushed across, so the popup opens under the module rather than at the end
+    // of the bar the module happens to sit nearest.
+    let offset = under.map(|placement| {
+        let popup = width as f32;
+        let room = placement.width - popup;
+        (placement.centre - popup / 2.0).clamp(0.0, room.max(0.0)) as i32
+    });
+
     let [top, _, bottom, _] = config.margin;
 
     // An exclusive bar already displaces the usable area, so the compositor
@@ -945,9 +1118,19 @@ fn popup_settings(
         config.total_height() as i32
     };
 
+    let left = offset.unwrap_or_default();
+
     let (edge, margin) = match config.position {
-        config::Position::Top => (Anchor::Top, (top + clearance, 0, 0, 0)),
-        config::Position::Bottom => (Anchor::Bottom, (0, 0, bottom + clearance, 0)),
+        config::Position::Top => (Anchor::Top, (top + clearance, 0, 0, left)),
+        config::Position::Bottom => (Anchor::Bottom, (0, 0, bottom + clearance, left)),
+    };
+
+    // An offset is measured from the left, so it needs that anchor whatever
+    // region the module is in.
+    let side = if offset.is_some() {
+        Some(Anchor::Left)
+    } else {
+        side
     };
 
     NewLayerShellSettings {
@@ -972,24 +1155,26 @@ const TOOLTIP_GLYPH_RATIO: f32 = 0.6;
 const TOOLTIP_LINE_RATIO: f32 = 1.4;
 const TOOLTIP_PADDING: f32 = 10.0;
 
-fn popup_view<'a>(bar: &'a Bar, popup: &'a Popup) -> Element<'a, Message> {
-    // The popup takes the palette of the bar it hangs from.
-    // A popup is drawn in the face of the module it hangs from, so a tooltip
-    // over a module in its own font is not suddenly in a different one.
-    let (font, size) = bar
-        .typography
-        .get(popup.module)
-        .copied()
-        .unwrap_or_default();
+/// The palette and face one module is drawn in.
+///
+/// A module's own font wins, then its bar's, then whatever the process started
+/// with -- and a popup takes the same, so a menu over a module in its own font
+/// is not suddenly in a different one.
+fn style_for(bar: &Bar, index: usize) -> config::Style {
+    let (font, size) = bar.typography.get(index).copied().unwrap_or_default();
 
-    let style = holding(bar, popup.module).map_or_else(
+    holding(bar, index).map_or_else(
         || bar.config.first().style,
         |layout| config::Style {
             font: font.or(layout.font),
             font_size: size.unwrap_or(layout.config.font_size),
             ..layout.config.style
         },
-    );
+    )
+}
+
+fn popup_view<'a>(bar: &'a Bar, popup: &'a Popup) -> Element<'a, Message> {
+    let style = style_for(bar, popup.module);
 
     let body: Element<'a, Message> = match &popup.kind {
         PopupKind::Tooltip => {
@@ -1074,11 +1259,16 @@ pub fn view(bar: &Bar, id: window::Id) -> Element<'_, Message> {
                 .map(move |event| Message::Module(index, event));
 
             Some(
-                mouse_area(element)
-                    .on_enter(Message::Enter(index))
-                    .on_exit(Message::Leave(index))
-                    .on_scroll(move |delta| Message::Scroll(index, delta))
-                    .into(),
+                // The id is what lets `placed` find where this module ended up,
+                // so its popup can open under it.
+                container(
+                    mouse_area(element)
+                        .on_enter(Message::Enter(index))
+                        .on_exit(Message::Leave(index))
+                        .on_scroll(move |delta| Message::Scroll(index, delta)),
+                )
+                .id(module_id(index))
+                .into(),
             )
         }))
         .spacing(spacing)
@@ -1108,6 +1298,9 @@ pub fn view(bar: &Bar, id: window::Id) -> Element<'_, Message> {
     });
 
     container(column(lines))
+        // The whole bar, which is how a popup learns the width it has to stay
+        // inside. A layer surface is never told its own size.
+        .id(widget::Id::new(BAR_ID))
         .width(Length::Fill)
         .height(Length::Fill)
         .padding([0.0, layout.config.padding])
@@ -1179,8 +1372,25 @@ mod tests {
         let mut bar = Bar::new(config);
         assert_eq!(bar.modules.len(), 1);
 
+        // A click asks where the module is before opening anything, so the
+        // answer that operation would give has to be sent by hand here.
+        let clicked = |bar: &mut Bar| {
+            tell(bar, Message::Module(0, Event::TogglePopup));
+            tell(
+                bar,
+                Message::PopupUnder {
+                    module: 0,
+                    at: Some(Placement {
+                        centre: 100.0,
+                        width: 1920.0,
+                    }),
+                    opening: Opening::Popup,
+                },
+            );
+        };
+
         // Nothing to choose from until the compositor has said what there is.
-        tell(&mut bar, Message::Module(0, Event::TogglePopup));
+        clicked(&mut bar);
         assert!(bar.popup.is_none());
 
         tell(
@@ -1194,7 +1404,7 @@ mod tests {
             ),
         );
 
-        tell(&mut bar, Message::Module(0, Event::TogglePopup));
+        clicked(&mut bar);
         assert!(
             matches!(
                 bar.popup.as_ref().map(|popup| &popup.kind),
@@ -1206,9 +1416,48 @@ mod tests {
         tell(&mut bar, Message::Module(0, Event::TogglePopup));
         assert!(bar.popup.is_none(), "a second click closes it");
 
-        tell(&mut bar, Message::Module(0, Event::TogglePopup));
+        clicked(&mut bar);
         tell(&mut bar, Message::Module(0, Event::Activate(1)));
         assert!(bar.popup.is_none(), "choosing a layout closes it");
+    }
+
+    /// The widget tree is asked where a module is, and a popup that waited on
+    /// that answer would never open if it did not come. It opens anyway.
+    #[test]
+    fn a_popup_opens_even_when_nothing_says_where_the_module_is() {
+        let config = config::Config {
+            bars: vec![config::Bar {
+                modules_left: vec![String::from("keyboard")],
+                ..config::Bar::default()
+            }],
+            ..config::Config::default()
+        };
+
+        let mut bar = Bar::new(config);
+
+        tell(
+            &mut bar,
+            Message::Module(
+                0,
+                Event::Layouts(compositor::Layouts {
+                    names: vec![String::from("pl")],
+                    current: 0,
+                }),
+            ),
+        );
+
+        tell(&mut bar, Message::Module(0, Event::TogglePopup));
+        tell(
+            &mut bar,
+            Message::PopupUnder {
+                module: 0,
+                at: None,
+                opening: Opening::Popup,
+            },
+        );
+
+        assert!(bar.popup.is_some(), "no placement is not a reason to hide");
+        assert!(bar.placement.is_none(), "and nothing was learnt from it");
     }
 
     /// The same list arriving again is nothing new, and rebuilding surfaces

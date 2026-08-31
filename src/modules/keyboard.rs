@@ -11,14 +11,9 @@ use iced::widget::{button, column, text};
 use iced::{Element, Length, Subscription, Task};
 
 use super::icon::faced;
-use super::{BROKEN, Event, Icon, Module, Popup, labelled};
+use super::{BROKEN, Event, Icon, Module, Popup, labelled, listing};
 use crate::compositor::{self, Compositor, Layouts};
 use crate::config;
-
-/// Per-entry metrics, used to size the popup before anything is drawn.
-const ENTRY_GLYPH: f32 = 9.5;
-const ENTRY_HEIGHT: f32 = 24.0;
-const ENTRY_PADDING: f32 = 10.0;
 
 pub struct Keyboard {
     compositor: Option<Box<dyn Compositor>>,
@@ -163,7 +158,7 @@ impl Module for Keyboard {
         self.layouts.active().map(|name| self.xkb.long(name))
     }
 
-    fn popup(&self) -> Option<Popup> {
+    fn popup(&self, style: config::Style) -> Option<Popup> {
         if self.layouts.names.is_empty() {
             return None;
         }
@@ -174,14 +169,9 @@ impl Module for Keyboard {
             .iter()
             .map(|name| self.xkb.long(name).chars().count())
             .max()
-            .unwrap_or(0) as f32;
+            .unwrap_or(0);
 
-        Some(Popup {
-            // Text cannot be measured outside a renderer, so this over-estimates
-            // rather than risk clipping a label.
-            width: widest.mul_add(ENTRY_GLYPH, 2.0 * ENTRY_PADDING),
-            height: (self.layouts.names.len() as f32).mul_add(ENTRY_HEIGHT, 2.0 * ENTRY_PADDING),
-        })
+        Some(listing(widest, self.layouts.names.len(), style))
     }
 
     fn popup_view(&self, style: config::Style) -> Element<'_, Event> {
@@ -430,7 +420,7 @@ mod tests {
         module.xkb = Xkb::parse(RULES);
 
         assert!(
-            module.popup().is_none(),
+            module.popup(config::Style::default()).is_none(),
             "nothing to choose from before the compositor has said"
         );
 
@@ -439,9 +429,12 @@ mod tests {
             current: 0,
         };
 
-        let popup = module.popup().expect("two layouts, two rows");
-        assert!(popup.height >= 2.0 * ENTRY_HEIGHT);
-        // Wide enough for "English (UK)" rather than for "GB".
-        assert!(popup.width >= 12.0 * ENTRY_GLYPH);
+        let style = config::Style::default();
+        let popup = module.popup(style).expect("two layouts, two rows");
+
+        // Two rows of text, and wide enough for "English (UK)" rather than for
+        // the "GB" the bar shows.
+        assert!(popup.height >= 2.0 * style.font_size);
+        assert!(popup.width >= 12.0 * style.font_size * 0.6);
     }
 }

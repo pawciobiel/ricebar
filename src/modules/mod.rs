@@ -68,6 +68,32 @@ pub struct Entry {
     pub exec: String,
 }
 
+/// How a popup listing rows of text is sized, as a share of the font size.
+///
+/// Deliberately over-wide: text cannot be measured outside a renderer, and too
+/// wide leaves harmless empty space while too narrow clips the end off every
+/// row. Measured against JetBrainsMono, whose glyphs advance 0.625 of the font
+/// size, so 0.7 leaves room for a face with wider capitals.
+const ROW_GLYPH: f32 = 0.7;
+const ROW_HEIGHT: f32 = 1.5;
+
+/// The popup's own padding, and the padding inside each row's button.
+const ROW_PADDING: f32 = 10.0;
+const ROW_INSET: f32 = 6.0;
+
+/// Size a popup that lists rows of text: a menu, the keyboard layouts, whatever
+/// a script printed.
+///
+/// Shared so those three cannot drift apart, and so a bar in a larger font gets
+/// a larger surface rather than a clipped one.
+pub fn listing(widest: usize, rows: usize, style: config::Style) -> Popup {
+    Popup {
+        width: (widest as f32)
+            .mul_add(style.font_size * ROW_GLYPH, 2.0 * (ROW_PADDING + ROW_INSET)),
+        height: (rows as f32).mul_add(style.font_size * ROW_HEIGHT, 2.0 * ROW_PADDING),
+    }
+}
+
 /// The popup a module opens when clicked: a menu of commands, a calendar, or
 /// whatever else it draws.
 ///
@@ -179,7 +205,11 @@ pub trait Module {
     }
 
     /// The popup this module opens when clicked, if it has one.
-    fn popup(&self) -> Option<Popup> {
+    ///
+    /// Takes the style because the surface has to be sized before anything is
+    /// drawn, and how much room a row of text needs depends on the font size.
+    fn popup(&self, style: config::Style) -> Option<Popup> {
+        let _ = style;
         None
     }
 

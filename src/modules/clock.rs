@@ -156,7 +156,7 @@ impl Module for Clock {
         Some(render(&self.tooltip_format))
     }
 
-    fn popup(&self) -> Option<Popup> {
+    fn popup(&self, _style: config::Style) -> Option<Popup> {
         let calendar = self.calendar.as_ref()?;
         let columns: f32 = if calendar.week_numbers { 8.0 } else { 7.0 };
 

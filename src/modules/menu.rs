@@ -7,13 +7,8 @@ use iced::widget::{button, column, text};
 use iced::{Element, Length, Task};
 
 use super::icon::faced;
-use super::{Event, Module, Popup};
+use super::{Event, Module, Popup, listing};
 use crate::config;
-
-/// Per-entry metrics, used to size the surface before anything is drawn.
-const ENTRY_GLYPH: f32 = 9.5;
-const ENTRY_HEIGHT: f32 = 24.0;
-const ENTRY_PADDING: f32 = 10.0;
 
 pub struct Menu {
     name: String,
@@ -96,20 +91,15 @@ impl Module for Menu {
         self.tooltip.clone()
     }
 
-    fn popup(&self) -> Option<Popup> {
+    fn popup(&self, style: config::Style) -> Option<Popup> {
         let widest = self
             .items
             .iter()
             .map(|item| item.label.chars().count())
             .max()
-            .unwrap_or(0) as f32;
+            .unwrap_or(0);
 
-        Some(Popup {
-            // Text cannot be measured outside a renderer, so this over-estimates
-            // rather than risk clipping a label.
-            width: widest.mul_add(ENTRY_GLYPH, 2.0 * ENTRY_PADDING),
-            height: (self.items.len() as f32).mul_add(ENTRY_HEIGHT, 2.0 * ENTRY_PADDING),
-        })
+        Some(listing(widest, self.items.len(), style))
     }
 
     fn popup_view(&self, style: config::Style) -> Element<'_, Event> {

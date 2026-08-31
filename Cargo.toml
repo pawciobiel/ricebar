@@ -23,7 +23,9 @@ exclude = ["/docs", "/dev/*.conf", "/dev/*.kdl"]
 # font glyph. They pull in decoders and resvg, which is most of ricebar's
 # compile time -- worth it, since a bar people rice is a bar whose icons they
 # want to choose.
-iced = { version = "0.14", features = ["tokio", "image", "svg"] }
+# `advanced` is what exposes widget operations, which is the only way to ask
+# where a module ended up: iced reports no geometry to `update`.
+iced = { version = "0.14", features = ["tokio", "image", "svg", "advanced"] }
 iced_layershell = "0.19.1"
 jiff = "0.2"
 serde = { version = "1", features = ["derive"] }

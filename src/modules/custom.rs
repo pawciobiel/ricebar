@@ -24,7 +24,8 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 
 use super::icon::faced;
 use super::{
-    Content, Direction, Entry, Event, Icon, Module, Popup, color_for, icon_for, labelled, spawn,
+    Content, Direction, Entry, Event, Icon, Module, Popup, color_for, icon_for, labelled, listing,
+    spawn,
 };
 use crate::config;
 
@@ -348,7 +349,7 @@ impl Module for Custom {
         self.content.tooltip.clone()
     }
 
-    fn popup(&self) -> Option<Popup> {
+    fn popup(&self, style: config::Style) -> Option<Popup> {
         let entries = self.entries.as_ref()?;
 
         if entries.is_empty() {
@@ -359,14 +360,9 @@ impl Module for Custom {
             .iter()
             .map(|entry| entry.label.chars().count())
             .max()
-            .unwrap_or(0) as f32;
+            .unwrap_or(0);
 
-        Some(Popup {
-            // Text cannot be measured outside a renderer, so this over-estimates
-            // rather than risk clipping a label.
-            width: widest.mul_add(ENTRY_GLYPH, 2.0 * ENTRY_PADDING),
-            height: (entries.len() as f32).mul_add(ENTRY_HEIGHT, 2.0 * ENTRY_PADDING),
-        })
+        Some(listing(widest, entries.len(), style))
     }
 
     fn popup_view(&self, style: config::Style) -> Element<'_, Event> {
@@ -405,11 +401,6 @@ impl Module for Custom {
         column(rows).spacing(2).into()
     }
 }
-
-/// Per-entry metrics, used to size the surface before anything is drawn.
-const ENTRY_GLYPH: f32 = 9.5;
-const ENTRY_HEIGHT: f32 = 24.0;
-const ENTRY_PADDING: f32 = 10.0;
 
 /// What a popup script prints.
 #[derive(Deserialize)]
@@ -755,10 +746,16 @@ mod tests {
 
         tell(&mut module, Event::TogglePopup);
         tell(&mut module, Event::Entries(vec![entry("a window")]));
-        assert!(module.popup().is_some(), "the entries are what open it");
+        assert!(
+            module.popup(config::Style::default()).is_some(),
+            "the entries are what open it"
+        );
 
         tell(&mut module, Event::ClosePopup);
-        assert!(module.popup().is_none(), "nothing is left to draw");
+        assert!(
+            module.popup(config::Style::default()).is_none(),
+            "nothing is left to draw"
+        );
 
         tell(&mut module, Event::TogglePopup);
         assert!(
@@ -780,6 +777,6 @@ mod tests {
         tell(&mut module, Event::ClosePopup);
 
         assert!(module.entries.is_none(), "the old entries are gone");
-        assert!(module.popup().is_none());
+        assert!(module.popup(config::Style::default()).is_none());
     }
 }
