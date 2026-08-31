@@ -72,9 +72,19 @@ impl Icon {
         }
     }
 
-    fn view<'a, Message: 'a>(self, size: f32, color: Color) -> Element<'a, Message> {
+    fn view<'a, Message: 'a>(
+        self,
+        size: f32,
+        color: Color,
+        style: crate::config::Style,
+    ) -> Element<'a, Message> {
         match self {
-            Self::Glyph(glyph) => text(glyph).color(color).into(),
+            // Through `faced`, so a module's own `font` and `font-size` reach a
+            // glyph icon as they do its text. Without that a face named for the
+            // module was silently ignored for exactly the thing it was most
+            // likely named for -- and a Nerd Font glyph drawn from the wrong
+            // variant overflows the fill behind it.
+            Self::Glyph(glyph) => faced(text(glyph).color(color), style).into(),
             Self::Vector { handle, symbolic } => svg(handle)
                 .width(Length::Fixed(size))
                 .height(Length::Fixed(size))
@@ -144,7 +154,7 @@ pub fn labelled<'a, Message: 'a>(
     }
 
     if let Some(icon) = icon {
-        parts.push(icon.view(size, color));
+        parts.push(icon.view(size, color, style));
     }
 
     if !after.is_empty() {

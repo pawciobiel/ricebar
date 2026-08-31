@@ -206,6 +206,26 @@ work does not have to be rediscovered.
       scan every device re-reports its signal strength, and none of that changes
       what the bar shows.
 
+- [x] **A glyph icon follows the module's own font.** `Icon::view` drew
+      `Icon::Glyph` as bare `text(glyph)`, with neither the size nor the face
+      resolved for that module -- so `font` and `font-size` on a module reached
+      its text and silently missed the icon, which is the thing they are most
+      often named for. It goes through `icon::faced` now, like everything else.
+
+      **What found it: a Nerd Font's proportional build draws icons wider than
+      they advance.** The MDI wifi glyphs measure 13 to 15px of ink at font-size
+      16 against an advance of about 10, so a module with a `background` -- the
+      fill is sized from the advance -- had its glyph hanging 5px past the right
+      edge while 6px sat empty on the left. Every wifi glyph in the family does
+      it; the Bluetooth ones happen not to.
+
+      The cure is the **Mono** build of the same font, which scales icons to one
+      cell: ink 10px, 6px clear either side, matching Bluetooth exactly. That is
+      a per-module `font`, which is what made the bug above worth fixing rather
+      than working around. Measured on the rig both ways, and confirmed the
+      `text` and `icon` paths render identically before the fix, so the code
+      path was ruled out before the font was blamed.
+
 - [ ] **Signal refresh.** `pkill -RTMIN+8 ricebar` to make a module re-read on
       demand, as waybar has, for scripts that cannot stream but should update
       after a keybind rather than on the next tick.
