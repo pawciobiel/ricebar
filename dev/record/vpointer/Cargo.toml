@@ -1,0 +1,14 @@
+# A recording tool, not part of ricebar: its own package, built on demand by
+# dev/record/record.sh. The empty `[workspace]` keeps it out of any workspace
+# the repository above it might grow.
+[workspace]
+
+[package]
+name = "vpointer"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+wayland-client = "0.31"
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }

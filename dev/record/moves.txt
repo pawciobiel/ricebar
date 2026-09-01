@@ -1,0 +1,93 @@
+# The demo, one command per line, read by dev/record/vpointer.
+#
+# Coordinates are pixels on the rig's 1280x720 output and belong to
+# dev/record/top.toml and bottom.toml: change a module list and the numbers
+# below move. `record.sh probe dev/record/moves.txt` shoots a frame a second,
+# which is how they were measured.
+
+# Start over the window, so the first move across the bar reads as a move.
+move 640 380
+wait 800
+
+# Hover along the right-hand modules. One tooltip follows the pointer rather
+# than four surfaces opening and closing.
+move 933 15
+wait 700
+move 995 15
+wait 900
+move 1060 15
+wait 700
+move 1133 15
+wait 700
+move 1207 15
+wait 1000
+
+# The power menu: open it, walk down it, and choose one. Every entry in the
+# recording config runs `true`.
+move 1261 15
+wait 700
+click
+wait 1200
+move 1200 70
+wait 400
+move 1200 95
+wait 400
+move 1200 121
+wait 400
+move 1200 146
+wait 600
+move 1200 95
+wait 500
+click
+wait 700
+
+# The clock: hover for the date, click for the calendar, and step through the
+# months. The calendar is a surface of its own, not a tooltip.
+move 500 15
+wait 1200
+click
+wait 1400
+move 603 73
+click
+wait 900
+click
+wait 900
+move 419 73
+click
+wait 700
+click
+wait 1000
+move 500 151
+wait 500
+click
+wait 800
+move 500 15
+click
+wait 800
+
+# A popup a script built: the window switcher prints a JSON list of labels and
+# the commands behind them.
+move 51 15
+wait 900
+click
+wait 1400
+move 85 98
+wait 700
+click
+wait 1400
+
+# The workspace buttons, live from the compositor.
+move 108 15
+wait 600
+click
+wait 1200
+move 80 15
+wait 600
+click
+wait 1200
+
+# The second bar is a second process with its own palette, and hovers the same.
+move 1245 696
+wait 1400
+move 640 380
+wait 900

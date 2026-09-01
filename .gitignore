@@ -1,4 +1,5 @@
 /target
+dev/record/vpointer/target
 
 # Never commit an API key.
 *.token

@@ -25,6 +25,13 @@ That is the whole idea. Colours, layout, modules and the commands behind them
 live together in `~/.config/ricebar/config.toml`, and editing it updates the
 running bar.
 
+![Two ricebar bars on sway: hovering the sensors, opening the power menu, stepping through the calendar, a script's popup and the workspace buttons](docs/ricebar.webp)
+
+Two bars from two files — a two-row one at the top, a floating one at the
+bottom — with the calendar, a power menu, a script-built popup and the
+workspace buttons all clicked live. Recorded in a headless sway by
+[`dev/record/record.sh`](dev/record/record.sh), so it is the same every time.
+
 ## Why another bar?
 
 There are good bars for Wayland already. This one was written around a
@@ -394,8 +401,9 @@ cargo fmt --check
 ```
 
 `dev/` holds nested sway and niri sessions for working on backends without
-leaving your own compositor, and `dev/record/` the configs behind the
-screenshot above.
+leaving your own compositor, and `dev/record/` the whole recording rig behind
+the animation above: a headless sway, two bar configs, a pointer that can be
+driven from a script, and `record.sh` to run a take start to finish.
 
 ## License
 

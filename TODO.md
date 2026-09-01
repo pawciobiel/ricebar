@@ -662,6 +662,35 @@ none of them stops the bar or its other modules.
       already cover what people actually ask for, and a script that knows its
       own icons can name them itself.
 
+## Recording
+
+- [x] **A pointer that clicks, on a headless seat.** Solved, and it was the one
+      thing the rig could not do. A headless seat reports `capabilities: 0`, so
+      clients never bind `wl_pointer` and neither hover nor clicks arrive.
+      `wlrctl pointer move` grants a pointer for the length of one command,
+      which is enough to see a tooltip appear and never enough for the click
+      that follows: the virtual pointer is destroyed as the command exits, the
+      capability flaps, and the enter state goes with it.
+
+      `dev/record/vpointer` is 150 lines of `wayland-client` that binds
+      `zwlr_virtual_pointer_manager_v1`, makes **one** pointer and holds it
+      open while it reads `move`, `click`, `scroll` and `wait` from stdin. The
+      seat then reports `capabilities: 1` with a real device for the whole
+      take, and the calendar, the power menu, the window popup and the
+      workspace buttons all take clicks. `swaymsg seat - cursor` is not needed
+      at all.
+
+- [x] **The demo animation.** `dev/record/record.sh` builds it end to end:
+      headless sway at 1280x720 from `dev/record/sway.conf`, two ricebar
+      processes (`top.toml`, `bottom.toml`), two `foot` windows so the
+      workspace buttons and the window popup have something to show,
+      `wf-recorder` for the video -- it draws the cursor into the frame, which
+      a screenshot loop does at a third of the rate -- and ffmpeg's
+      `libwebp_anim` for `docs/ricebar.webp`. The choreography is
+      `dev/record/moves.txt`, in pixels; `record.sh probe <moves>` shoots a
+      frame a second so a popup can be measured before a take is built round
+      it.
+
 ## Known constraints (not bugs)
 
 - Tooltips are layer surfaces, never xdg popups. `iced_layershell` builds
