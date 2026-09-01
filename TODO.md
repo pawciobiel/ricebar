@@ -333,6 +333,18 @@ state a script cannot see.
       pixel-smooth version means either a new dependency or a custom widget.
       Looks best in a monospace font.
 
+- [x] **See-through tooltips, menus and popups.** One key per bar,
+      `[bar.style] popup-background`, unset falling back to `background`. The
+      alpha was already there -- `Rgba` reads `#rrggbbaa` and the popup surface
+      is transparent with the container painting the fill, which is what lets
+      border-radius round real corners -- but a popup took the bar's own
+      background, so translucent popups meant a translucent bar.
+
+      It deliberately does *not* override `style.background` for the popup's
+      contents: a menu entry and a calendar arrow draw their hovered *text* in
+      `background`, so overriding it there would have made the text
+      see-through instead of the surface.
+
 - [x] **Open a popup under the module it belongs to.** Done. A popup could only
       be anchored to an edge of the bar, since iced reports no widget geometry
       to `update` and a layer surface is never told its own width -- so a menu

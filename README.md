@@ -63,6 +63,8 @@ Beyond those two:
   laptop and the ticker on the big screen
 - **More than one row.** `[[bar.row]]` stacks lines, each with its own left,
   centre and right, and its own height
+- **See-through tooltips, menus and popups.** One `popup-background` per bar,
+  alpha included, over a bar that stays as solid as you like
 - Multiple monitors, and hotplug: plug one in and every bar without an `output`
   appears on it
 - Reserves its own space, so nothing renders underneath it
@@ -154,6 +156,7 @@ modules-right = ["cpu", "memory", "battery"]
 
 [bar.style]
 background = "#1e1e2ecc"         # the last two digits are alpha
+popup-background = "#1e1e2eaa"   # tooltips, menus and popups; unset takes `background`
 border-color = "#89b4fa"
 border-width = 2
 border-radius = 22

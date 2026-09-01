@@ -326,6 +326,20 @@ mod tests {
         assert_eq!(many.bars[1].position, super::super::Position::Bottom);
     }
 
+    /// `deny_unknown_fields` refuses a key spelt any other way, so the name in
+    /// the documentation is checked against the one serde reads.
+    #[test]
+    fn a_bar_may_give_its_popups_their_own_fill() {
+        let config = super::super::parse(
+            Path::new("/dev/null"),
+            "[bar]\n[bar.style]\npopup-background = \"#1e1e2ecc\"\n",
+        )
+        .expect("`popup-background` must parse");
+
+        let fill = config.bars[0].style.popup_fill().color();
+        assert!(fill.a < 1.0, "alpha is what makes a popup see-through");
+    }
+
     /// A running bar with no surfaces at all would look like a crash.
     #[test]
     fn an_empty_bar_list_is_an_error() {

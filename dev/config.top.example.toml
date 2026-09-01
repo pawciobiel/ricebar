@@ -32,6 +32,7 @@ accent = "#89b4fa"
 muted = "#45475a"
 dim = "#6c7086"
 urgent = "#f38ba8"
+popup-background = "#1e1e2ed9"   # tooltips, menus and popups, a little see-through
 border-color = "#89b4fa"
 border-width = 0
 border-radius = 0

@@ -84,6 +84,13 @@ accent = "#89b4fa"        # fill behind the focused item
 muted = "#45475a"         # fill behind an active but unfocused item
 dim = "#6c7086"           # text of an empty item
 urgent = "#f38ba8"        # wants attention, e.g. today in the calendar
+
+# Fill behind every tooltip, menu and popup on this bar. Unset takes
+# `background`, so write it only to make them differ -- most often to give them
+# alpha the bar itself does not have.
+#
+#   popup-background = "#1e1e2ecc"
+
 border-color = "#89b4fa"
 border-width = 0
 border-radius = 0

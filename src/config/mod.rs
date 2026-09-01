@@ -214,6 +214,10 @@ pub struct Style {
     pub dim: Rgba,
     /// Something that wants attention, such as today in the calendar.
     pub urgent: Rgba,
+    /// Fill behind a tooltip, a menu and a module's popup. Unset takes
+    /// `background`, so this is only written to make the popups differ from
+    /// the bar -- most often to give them alpha the bar does not have.
+    pub popup_background: Option<Rgba>,
     pub border_color: Rgba,
     pub border_width: f32,
     pub border_radius: f32,
@@ -234,6 +238,16 @@ pub struct Style {
 
 fn default_font_size() -> f32 {
     16.0
+}
+
+impl Style {
+    /// The fill behind a tooltip, a menu or a popup.
+    ///
+    /// One key covers all three: they are the same surface, drawn by the bar
+    /// rather than by the module, so a module's own colours are left alone.
+    pub fn popup_fill(self) -> Rgba {
+        self.popup_background.unwrap_or(self.background)
+    }
 }
 
 /// The `iced::Font` for a family name, or `None` for the process default.
@@ -271,6 +285,7 @@ impl Default for Style {
             muted: Rgba::new(0x45, 0x47, 0x5a),
             dim: Rgba::new(0x6c, 0x70, 0x86),
             urgent: Rgba::new(0xf3, 0x8b, 0xa8),
+            popup_background: None,
             border_color: Rgba::new(0x89, 0xb4, 0xfa),
             border_width: 0.0,
             border_radius: 0.0,

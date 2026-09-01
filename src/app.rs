@@ -1205,7 +1205,7 @@ fn popup_view<'a>(bar: &'a Bar, popup: &'a Popup) -> Element<'a, Message> {
         .center_y(Length::Fill)
         .padding([0.0, TOOLTIP_PADDING])
         .style(move |_theme| container::Style {
-            background: Some(style.background.color().into()),
+            background: Some(style.popup_fill().color().into()),
             text_color: Some(style.foreground.color()),
             border: Border {
                 color: style.border_color.color(),
@@ -1465,6 +1465,48 @@ mod tests {
 
         assert!(bar.popup.is_some(), "no placement is not a reason to hide");
         assert!(bar.placement.is_none(), "and nothing was learnt from it");
+    }
+
+    /// A tooltip, a menu and a popup all take their bar's `popup-background`,
+    /// and its plain background where that is unset. Nothing renders in a test
+    /// rig, so this checks the colour `popup_view` paints with -- and that the
+    /// bar next to it keeps its own.
+    #[test]
+    fn a_popup_takes_the_fill_of_the_bar_it_belongs_to() {
+        const FILL: config::Rgba = config::Rgba::new(0x11, 0x22, 0x33);
+
+        let config = config::Config {
+            bars: vec![
+                config::Bar {
+                    modules_left: vec![String::from("clock")],
+                    style: config::Style {
+                        popup_background: Some(FILL),
+                        ..config::Style::default()
+                    },
+                    ..config::Bar::default()
+                },
+                config::Bar {
+                    modules_left: vec![String::from("keyboard")],
+                    ..config::Bar::default()
+                },
+            ],
+            ..config::Config::default()
+        };
+
+        let bar = Bar::new(config);
+        let index = |name: &str| {
+            bar.modules
+                .iter()
+                .position(|module| module.name() == name)
+                .expect("the module is named by a bar")
+        };
+
+        assert_eq!(style_for(&bar, index("clock")).popup_fill(), FILL);
+        assert_eq!(
+            style_for(&bar, index("keyboard")).popup_fill(),
+            config::Style::default().background,
+            "unset follows that bar's own background"
+        );
     }
 
     /// The same list arriving again is nothing new, and rebuilding surfaces

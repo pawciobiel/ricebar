@@ -23,6 +23,7 @@ accent = "#d79921"
 muted = "#504945"
 dim = "#928374"
 urgent = "#cc241d"
+popup-background = "#282828b3"
 border-color = "#d79921"
 border-width = 1
 border-radius = 10
