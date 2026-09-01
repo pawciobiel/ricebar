@@ -51,6 +51,9 @@ pub struct Custom {
     ticker: Option<Ticker>,
     background: Option<config::Rgba>,
     foreground: Option<config::Rgba>,
+    /// The hover text from the config, kept apart from the content because a
+    /// script that prints a plain line replaces the content wholesale.
+    tooltip: Option<String>,
     content: Content,
 }
 
@@ -105,6 +108,7 @@ impl Custom {
             }),
             background: config.background,
             foreground: config.foreground,
+            tooltip: config.tooltip.clone(),
             content: if trusted {
                 Content {
                     text: config.label.clone(),
@@ -345,8 +349,13 @@ impl Module for Custom {
             .into()
     }
 
+    /// What the script last said, and the config's own text where it said
+    /// nothing -- a script that prints a plain line has no way to name one.
     fn tooltip(&self) -> Option<String> {
-        self.content.tooltip.clone()
+        self.content
+            .tooltip
+            .clone()
+            .or_else(|| self.tooltip.clone())
     }
 
     fn popup(&self, style: config::Style) -> Option<Popup> {
@@ -761,6 +770,41 @@ mod tests {
         assert!(
             module.showing,
             "one click reopens it, rather than closing it"
+        );
+    }
+
+    /// A plain line carries no tooltip, and content arrives whole -- so the
+    /// first reading used to throw away the `tooltip` the config had named,
+    /// and a module with an `exec` had hover text only until it first ran.
+    #[test]
+    fn a_reading_does_not_take_the_configured_tooltip_with_it() {
+        let mut module = Custom::new(
+            &config::Custom {
+                name: String::from("disk"),
+                exec: Some(String::from("true")),
+                tooltip: Some(String::from("Space left on /")),
+                ..config::Custom::default()
+            },
+            true,
+        );
+
+        assert_eq!(module.tooltip().as_deref(), Some("Space left on /"));
+
+        tell(&mut module, Event::Content(parse("135G free")));
+        assert_eq!(
+            module.tooltip().as_deref(),
+            Some("Space left on /"),
+            "a plain reading says nothing about the hover text"
+        );
+
+        tell(
+            &mut module,
+            Event::Content(parse(r#"{"text": "135G free", "tooltip": "/dev/sda2"}"#)),
+        );
+        assert_eq!(
+            module.tooltip().as_deref(),
+            Some("/dev/sda2"),
+            "but a script that names one wins"
         );
     }
 

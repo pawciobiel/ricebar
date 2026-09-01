@@ -226,6 +226,19 @@ work does not have to be rediscovered.
       `text` and `icon` paths render identically before the fix, so the code
       path was ruled out before the font was blamed.
 
+- [x] **A reading no longer eats the configured tooltip.** `tooltip` on a
+      `[[module.custom]]` worked until the script first printed, and then
+      stopped: `parse` returns a whole `Content` with `tooltip: None` for a
+      plain line, and `Event::Content` replaces the content wholesale. So
+      `disk`, `weather` and every other polled module lost its hover text a
+      second after the bar started, which reads as "tooltips are unreliable"
+      rather than as a bug. The config's text is kept beside the content now
+      and used where the script named none; a script that names one still
+      wins.
+
+      **Found by the recording rig**, the first time a scripted hover could be
+      pointed at a module and photographed.
+
 - [ ] **Signal refresh.** `pkill -RTMIN+8 ricebar` to make a module re-read on
       demand, as waybar has, for scripts that cannot stream but should update
       after a keybind rather than on the next tick.
