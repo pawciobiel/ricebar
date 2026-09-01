@@ -11,9 +11,13 @@ Prints a popup for ricebar to draw:
     stream = true
     popup = "~/.config/ricebar/scripts/wifi-popup.py"
 
-Talks to iwd through iwctl. No root needed: iwd's D-Bus policy admits the
-`wheel` and `netdev` groups, so a member of either can scan, connect and power
-the device.
+Talks to iwd through iwctl, and to nothing else -- on wpa_supplicant or
+NetworkManager there is no iwctl to call, so write your own popup printing the
+same JSON and name that in `popup` instead. The bar half, wifi.sh, reads `ip`
+and `iw` and needs no such thing.
+
+No root needed: iwd's D-Bus policy admits the `wheel` and `netdev` groups, so a
+member of either can scan, connect and power the device.
 
 A network iwd already has a passphrase for connects straight from the list. One
 it does not cannot -- iwd would need to ask for the passphrase, and a menu has
@@ -66,11 +70,16 @@ def device():
 
 
 def powered(dev):
-    """Whether the radio is on. iwd takes the interface down when it is not."""
+    """Whether the radio is on. iwd takes the interface down when it is not.
+
+    IFF_UP rather than operstate, which reports the link: an interface that is
+    up but not associated still says "down", so reading that offered "Turn
+    Wi-Fi on" for a radio already on, and the click did nothing.
+    """
     try:
-        with open(f"/sys/class/net/{dev}/operstate") as state:
-            return state.read().strip() == "up"
-    except OSError:
+        with open(f"/sys/class/net/{dev}/flags") as flags:
+            return int(flags.read().strip(), 16) & 1 == 1
+    except (OSError, ValueError):
         return False
 
 
@@ -124,6 +133,23 @@ def known():
     return names
 
 
+def elide(ssid):
+    """An SSID cut to NAME characters, from the middle rather than the end.
+
+    A dual-band access point names its two radios alike but for a suffix, so
+    cutting the tail drops the one part that tells them apart: "...B4" and
+    "...B45G" both came out as the same string, and the menu read as an offer
+    to join the network already connected.
+    """
+    if len(ssid) <= NAME:
+        return ssid
+
+    head = (NAME - 1) // 2
+    tail = NAME - 1 - head
+
+    return ssid[:head] + "…" + ssid[len(ssid) - tail :]
+
+
 def terminal():
     return next((app for app in TERMINALS if shutil.which(app)), None)
 
@@ -161,7 +187,7 @@ def items():
     term = terminal()
 
     for ssid, security, connected in networks(dev):
-        short = ssid[:NAME]
+        short = elide(ssid)
 
         if connected:
             rows.append(
@@ -185,7 +211,10 @@ def items():
             # type it.
             rows.append(
                 {
-                    "label": "Join {}...".format(short),
+                    # Said in a word, not as a trailing "...", which reads as a
+                    # name cut short -- next to a real elision it hid the very
+                    # suffix that separates a 5 GHz network from its twin.
+                    "label": "Join {} (passphrase)".format(short),
                     "exec": "{} -e sh -c {}".format(
                         term, quote(joining + "; echo; read -r _")
                     ),

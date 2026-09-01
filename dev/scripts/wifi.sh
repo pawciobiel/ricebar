@@ -46,6 +46,16 @@ device() {
     done
 }
 
+# Whether the radio is on, from IFF_UP in the interface flags.
+#
+# Not operstate: that reports the *link*, and stays "down" for as long as the
+# radio is on but not associated -- which is most of the time, and made the
+# module say the radio was off whenever it was merely idle.
+up() {
+    flags=$(cat "/sys/class/net/$1/flags" 2>/dev/null) || return 1
+    [ $((flags & 1)) -eq 1 ]
+}
+
 # Signal runs about -30 dBm (excellent) to -90 (unusable).
 quality() {
     awk -v d="${1:--90}" 'BEGIN {
@@ -79,9 +89,9 @@ state() {
         return
     fi
 
-    # iwd takes the interface down when the device is powered off, so the link
-    # state is the radio state.
-    if ! grep -qx up "/sys/class/net/$dev/operstate" 2>/dev/null; then
+    # iwd takes the interface down when the device is powered off, so IFF_UP
+    # is the radio state.
+    if ! up "$dev"; then
         printf '{"text":"","icon":"%b","tooltip":"Wi-Fi off (%s)","percentage":0}' "$OFF" "$dev"
         return
     fi
