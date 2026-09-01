@@ -360,6 +360,19 @@ A name fontconfig does not recognise is substituted silently rather than
 reported, so text in the wrong face is worth checking with `fc-match` before
 suspecting ricebar.
 
+A module's own `font` covers its **icons** as well as its text, which is what
+makes a per-module font worth having. A proportional Nerd Font build draws some
+icon sets wider than they advance — the Wi-Fi glyphs measure 13 to 15px of ink
+against an advance of 10 — so a module with a `background` has its glyph
+hanging past the fill. The **Mono** build of the same family scales every icon
+to one cell and cures it, for that module alone:
+
+```toml
+[[module.custom]]
+name = "wifi"
+font = "JetBrainsMono Nerd Font Mono"
+```
+
 **None of it is mandatory.** Every icon is config, so a plain-text bar needs no
 special font at all — and pictures need none either:
 
@@ -380,7 +393,13 @@ Worth knowing before you switch:
 
 - **No system tray**, and none planned. It is D-Bus (StatusNotifierItem plus
   DBusMenu), and ricebar deliberately does not speak D-Bus. If you rely on
-  apps that close to a tray icon, waybar or ironbar will serve you better.
+  apps that close to a tray icon,
+  [waybar](https://github.com/Alexays/Waybar),
+  [ironbar](https://github.com/JakeStanger/ironbar) or
+  [ashell](https://github.com/MalpenZibo/ashell) will serve you better.
+  ashell is the closest neighbour of the three: it is built on iced as well,
+  and takes the other road — a ready-made shell with a tray, media and network
+  panels, configured rather than scripted.
 - **No media controls** or notification module, for the same reason.
 - **No icon themes by name yet** — icons are paths. `icon-theme = "candy-icons"`
   is on the list.
