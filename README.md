@@ -106,8 +106,13 @@ either, both or neither.
 | Icon by name | the script returns `"icon"`, a glyph or a path, for icons that are not a level |
 
 Examples ship with it and are written out on first run: volume, microphone,
-Bluetooth, network, weather, a market ticker, and a window switcher that works
-out the compositor for itself.
+Wi-Fi, Bluetooth, network, weather, a market ticker, and a window switcher that
+works out the compositor for itself.
+
+What a script needs is the script's own business, not the bar's. The Wi-Fi
+display reads `ip` and `iw` and so is the same under any backend, while its
+popup drives iwd through `iwctl` — on wpa_supplicant or NetworkManager, point
+`popup` at a script of your own that prints the same JSON.
 
 **Icons**
 

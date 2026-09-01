@@ -117,6 +117,8 @@ tooltip = "Open windows"
 popup = "~/.config/ricebar/scripts/windows-popup.py"
 
 # Wi-Fi: the radio and the signal, with a popup to toggle it, scan and join.
+# The bar half reads `ip` and `iw` and suits any backend; the popup drives iwd
+# through iwctl, so on another one name a popup script of your own here.
 # `network` below names whichever interface holds the default route; this one is
 # about the radio, so it keeps to a glyph with the SSID on hover.
 [[module.custom]]
